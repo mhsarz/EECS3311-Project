@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<diagram program="umlet" version="15.1">
+  <zoom_level>10</zoom_level>
+  <element>
+    <id>UMLSequenceAllInOne</id>
+    <coordinates>
+      <x>10</x>
+      <y>10</y>
+      <w>1560</w>
+      <h>2120</h>
+    </coordinates>
+    <panel_attributes>title=SD06 Add Pantry Item and Expiry Alerts (F03, F05) - Singleton
+obj=User~u ACTOR
+obj=:MainWindow~gui
+obj=:CLIApp~cli
+obj=:AgentController~ctrl
+obj=:PantryManager~pm
+obj=:JsonStorage~store
+obj=:NotificationCenter~nc
+gui-&gt;&gt;&gt;nc : getInstance(); on=nc
+nc.&gt;gui : NotificationCenter; off=nc
+gui-&gt;&gt;&gt;nc : subscribe(this); on=nc
+off=nc
+cli-&gt;&gt;&gt;nc : getInstance(); on=nc
+nc.&gt;cli : NotificationCenter; off=nc
+cli-&gt;&gt;&gt;nc : subscribe(this); on=nc
+off=nc
+u-&gt;&gt;&gt;gui : fill item form, click Save; on=gui
+gui-&gt;&gt;&gt;ctrl : addPantryItem(item, false); on=ctrl
+ctrl-&gt;&gt;&gt;pm : findByName(name); on=pm
+pm.&gt;ctrl : List of PantryItem; off=pm
+combinedFragment=alt~dup u nc
+u:[new item]
+ctrl-&gt;&gt;&gt;pm : addItem(item); on=pm
+pm.&gt;ctrl : true; off=pm
+..
+u:[item already exists]
+ctrl.&gt;gui : false (duplicate found); off=ctrl
+gui.&gt;u : ask: mistake or merge?; off=gui
+u-&gt;&gt;&gt;gui : choose Merge; on=gui
+gui-&gt;&gt;&gt;ctrl : addPantryItem(item, true); on=ctrl
+ctrl-&gt;&gt;&gt;pm : mergeQuantity(id, qty); on=pm
+pm.&gt;ctrl; off=pm
+--
+ctrl-&gt;&gt;&gt;store : save("pantry", items); on=store
+store.&gt;ctrl; off=store
+ctrl.&gt;gui : pantry updated; off=ctrl
+gui.&gt;u : show updated pantry; off=gui
+gui-&gt;&gt;&gt;ctrl : checkExpiry() on start and daily; on=ctrl
+ctrl-&gt;&gt;&gt;pm : getExpiringItems(3); on=pm
+pm.&gt;ctrl : List of PantryItem; off=pm
+combinedFragment=loop~each gui nc
+ctrl:[for each expiring item]
+ctrl-&gt;&gt;&gt;nc : publish(Notification EXPIRY); on=nc
+nc-&gt;&gt;&gt;gui : onNotify(n); on=gui
+off=gui
+nc-&gt;&gt;&gt;cli : onNotify(n); on=cli
+off=cli
+nc.&gt;ctrl; off=nc
+--
+ctrl.&gt;gui; off=ctrl
+gui.&gt;u : show expiry alerts
+combinedFragment=opt~sug u nc
+u:[user clicks Suggest Recipes]
+ref=u ctrl : generate recipe with expiring items required (see SD01)
+--</panel_attributes>
+    <additional_attributes/>
+  </element>
+</diagram>

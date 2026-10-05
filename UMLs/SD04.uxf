@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<diagram program="umlet" version="15.1">
+  <zoom_level>10</zoom_level>
+  <element>
+    <id>UMLSequenceAllInOne</id>
+    <coordinates>
+      <x>10</x>
+      <y>10</y>
+      <w>1800</w>
+      <h>1430</h>
+    </coordinates>
+    <panel_attributes>title=SD04 Refresh Flyers (F10)
+obj=User~u ACTOR
+obj=:MainWindow~gui
+obj=:AgentController~ctrl
+obj=:FlyerService~fs
+obj=:OnlineFlyerSource~online
+obj=:FileFlyerSource~file
+obj=:RecipeAgent~agent
+obj=:LLMClientProxy~llm
+u-&gt;&gt;&gt;gui : click Refresh Flyers; on=gui
+gui-&gt;&gt;&gt;ctrl : refreshFlyers(); on=ctrl
+ctrl-&gt;&gt;&gt;fs : getStores(); on=fs
+fs.&gt;ctrl : selected stores; off=fs
+combinedFragment=loop~stores ctrl llm
+ctrl:[for each selected store]
+ctrl-&gt;&gt;&gt;fs : fetchRaw(store); on=fs
+combinedFragment=alt~src ctrl llm
+fs:[store uses online source]
+fs-&gt;&gt;&gt;online : fetch(store); on=online
+online.&gt;fs : raw flyer text; off=online
+..
+fs:[store uses uploaded file]
+fs-&gt;&gt;&gt;file : fetch(store); on=file
+file.&gt;fs : raw flyer text; off=file
+--
+fs.&gt;ctrl : raw text; off=fs
+ctrl-&gt;&gt;&gt;agent : extractFlyer(raw, store); on=agent
+agent-&gt;&gt;&gt;llm : generate(prompt, tools); on=llm
+llm.&gt;agent : LLMResponse (items JSON); off=llm
+agent.&gt;ctrl : Flyer; off=agent
+ctrl-&gt;&gt;&gt;fs : save(flyer); on=fs
+fs.&gt;ctrl; off=fs
+--
+ref=ctrl llm : check cart against new flyers (see SD03)
+ctrl.&gt;gui : done; off=ctrl
+gui.&gt;u : show sale items; off=gui</panel_attributes>
+    <additional_attributes/>
+  </element>
+</diagram>

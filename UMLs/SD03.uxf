@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<diagram program="umlet" version="15.1">
+  <zoom_level>10</zoom_level>
+  <element>
+    <id>UMLSequenceAllInOne</id>
+    <coordinates>
+      <x>10</x>
+      <y>10</y>
+      <w>2000</w>
+      <h>1350</h>
+    </coordinates>
+    <panel_attributes>title=SD03 Add to Cart and Sale Alerts (F02)
+obj=User~u ACTOR
+obj=:MainWindow~gui
+obj=:CLIApp~cli
+obj=:AgentController~ctrl
+obj=:ShoppingCart~cart
+obj=:FlyerService~fs
+obj=:RecipeAgent~agent
+obj=:LLMClientProxy~llm
+obj=:NotificationCenter~nc
+u-&gt;&gt;&gt;gui : enter item, click Add; on=gui
+gui-&gt;&gt;&gt;ctrl : addToCart(item); on=ctrl
+ctrl-&gt;&gt;&gt;cart : add(item); on=cart
+cart.&gt;ctrl; off=cart
+ctrl-&gt;&gt;&gt;fs : getCurrentFlyers(); on=fs
+fs.&gt;ctrl : List of Flyer; off=fs
+combinedFragment=alt~flyers u nc
+u:[flyers available this week]
+ctrl-&gt;&gt;&gt;agent : matchSales(cartItems, flyers); on=agent
+agent-&gt;&gt;&gt;llm : generate(prompt, tools); on=llm
+llm.&gt;agent : LLMResponse (matches JSON); off=llm
+agent.&gt;ctrl : List of FlyerItem on sale; off=agent
+combinedFragment=loop~each gui nc
+ctrl:[for each item on sale]
+ctrl-&gt;&gt;&gt;nc : publish(Notification SALE); on=nc
+nc-&gt;&gt;&gt;gui : onNotify(n)
+nc-&gt;&gt;&gt;cli : onNotify(n); on=cli
+off=cli
+nc.&gt;ctrl; off=nc
+--
+..
+u:[no flyers this week]
+ctrl.&gt;gui : saved, no sale check; off=ctrl
+--
+ctrl.&gt;gui : updated cart
+gui.&gt;u : show cart and sale alerts; off=gui</panel_attributes>
+    <additional_attributes/>
+  </element>
+</diagram>

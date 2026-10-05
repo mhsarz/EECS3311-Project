@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<diagram program="umlet" version="15.1">
+  <zoom_level>10</zoom_level>
+  <element>
+    <id>UMLSequenceAllInOne</id>
+    <coordinates>
+      <x>10</x>
+      <y>10</y>
+      <w>2330</w>
+      <h>2090</h>
+    </coordinates>
+    <panel_attributes>title=SD05 Cook a Recipe: check ingredients, mark cooked, undo (F11, F06)
+obj=User~u ACTOR
+obj=:MainWindow~gui
+obj=:AgentController~ctrl
+obj=:PantryManager~pm
+obj=:RecipeAgent~agent
+obj=:LLMClientProxy~llm
+obj=:CommandHistory~ch
+obj=:CookRecipeCommand~cmd CREATED_LATER
+obj=:RecipeHistory~hist
+u-&gt;&gt;&gt;gui : click Cook This; on=gui
+gui-&gt;&gt;&gt;ctrl : checkIngredients(recipe); on=ctrl
+ctrl-&gt;&gt;&gt;pm : checkRecipe(recipe); on=pm
+pm.&gt;ctrl : IngredientCheck; off=pm
+combinedFragment=opt~names ctrl llm
+ctrl:[some ingredient names have no exact match]
+ctrl-&gt;&gt;&gt;agent : matchNames(names); on=agent
+agent-&gt;&gt;&gt;llm : generate(prompt, tools); on=llm
+llm.&gt;agent : LLMResponse (name matches); off=llm
+agent.&gt;ctrl : Map recipe name to pantry name; off=agent
+--
+ctrl.&gt;gui : IngredientCheck; off=ctrl
+gui.&gt;u : show missing ingredients; off=gui
+combinedFragment=opt~cart u hist
+u:[user adds missing items to cart]
+ref=u ctrl : add to cart (see SD03)
+--
+u-&gt;&gt;&gt;gui : click Mark as Cooked; on=gui
+gui-&gt;&gt;&gt;ctrl : markCooked(recipe); on=ctrl
+ctrl-&gt;&gt;&gt;cmd : new CookRecipeCommand(recipe, pantry, history)
+ctrl-&gt;&gt;&gt;ch : run(cmd); on=ch
+ch-&gt;&gt;&gt;cmd : execute(); on=cmd
+combinedFragment=loop~ing cmd pm
+cmd:[for each ingredient]
+cmd-&gt;&gt;&gt;pm : deduct(name, qty); on=pm
+pm.&gt;cmd : previous quantity; off=pm
+--
+cmd-&gt;&gt;&gt;hist : recordCooked(id); on=hist
+off=hist
+cmd.&gt;ch; off=cmd
+ch.&gt;ctrl; off=ch
+ctrl.&gt;gui : pantry updated; off=ctrl
+gui.&gt;u : show updated pantry; off=gui
+combinedFragment=opt~undo u hist
+u:[user clicks Undo]
+u-&gt;&gt;&gt;gui : click Undo; on=gui
+gui-&gt;&gt;&gt;ctrl : undo(); on=ctrl
+ctrl-&gt;&gt;&gt;ch : undo(); on=ch
+ch-&gt;&gt;&gt;cmd : undo(); on=cmd
+cmd-&gt;&gt;&gt;pm : restore(snapshot); on=pm
+off=pm
+cmd.&gt;ch; off=cmd
+ch.&gt;ctrl; off=ch
+ctrl.&gt;gui : pantry restored; off=ctrl
+gui.&gt;u : show restored pantry; off=gui
+--</panel_attributes>
+    <additional_attributes/>
+  </element>
+</diagram>

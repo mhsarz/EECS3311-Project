@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<diagram program="umlet" version="15.1">
+  <zoom_level>10</zoom_level>
+  <element>
+    <id>UMLSequenceAllInOne</id>
+    <coordinates>
+      <x>0</x>
+      <y>0</y>
+      <w>2840</w>
+      <h>1530</h>
+    </coordinates>
+    <panel_attributes>title=SD02 Chat with Agent: tool-use loop (F09, F04) - Proxy, Adapter
+obj=User~u ACTOR
+obj=:MainWindow~gui
+obj=:AgentController~ctrl
+obj=:RecipeAgent~agent
+obj=:LLMClientProxy~proxy
+obj=:ClaudeClient~llm
+obj=:AnthropicSDK~sdk
+obj=:CartTool~tool
+obj=:ShoppingCart~cart
+obj=:ProfileTool~prof
+u-&gt;&gt;&gt;gui : type message, click Send; on=gui
+gui-&gt;&gt;&gt;ctrl : chat(message); on=ctrl
+ctrl-&gt;&gt;&gt;agent : chat(message); on=agent
+agent-&gt;agent + : add message to chatHistory
+combinedFragment=loop~loop1 agent cart
+agent:[response has a tool call and calls &lt; 5]
+agent-&gt;&gt;&gt;proxy : generate(prompt, tools); on=proxy
+proxy-&gt;&gt;&gt;llm : generate(prompt, tools); on=llm
+llm-&gt;&gt;&gt;sdk : createMessage(params); on=sdk
+sdk.&gt;llm : response; off=sdk
+llm.&gt;proxy : LLMResponse; off=llm
+proxy.&gt;agent : LLMResponse, hasToolCall() is true; off=proxy
+agent-&gt;&gt;&gt;tool : execute(args); on=tool
+tool-&gt;&gt;&gt;cart : add(item); on=cart
+cart.&gt;tool; off=cart
+tool.&gt;agent : result text; off=tool
+--
+combinedFragment=opt~profile agent prof
+agent:[profile questionnaire finished (F04)]
+agent-&gt;&gt;&gt;prof : execute("save", profile JSON); on=prof
+prof.&gt;agent : saved; off=prof
+--
+combinedFragment=alt~final u prof
+u:[final answer]
+agent.&gt;ctrl : answer text; off=agent
+ctrl.&gt;gui : answer text; off=ctrl
+gui.&gt;u : show answer; off=gui
+..
+on=agent; on=ctrl; on=gui
+u:[LLM unavailable]
+proxy.&gt;agent : error "LLM unavailable"
+agent.&gt;ctrl : error; off=agent
+ctrl.&gt;gui : error; off=ctrl
+gui.&gt;u : show error message; off=gui
+--</panel_attributes>
+    <additional_attributes/>
+  </element>
+</diagram>

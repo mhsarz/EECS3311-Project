@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<diagram program="umlet" version="15.1">
+  <zoom_level>6</zoom_level>
+  <element>
+    <id>UMLSequenceAllInOne</id>
+    <coordinates>
+      <x>0</x>
+      <y>18</y>
+      <w>2184</w>
+      <h>1620</h>
+    </coordinates>
+    <panel_attributes>title=SD01 Generate, Substitute and Save a Recipe (F01, F07, F08) - Builder, Proxy, Adapter
+obj=User~u ACTOR
+obj=:MainWindow~gui
+obj=:AgentController~ctrl
+obj=:RecipeHistory~hist
+obj=:RecipeAgent~agent
+obj=:PantryTool~ptool
+obj=:ProfileTool~prof
+obj=:ClaudePromptBuilder~pb
+obj=:Prompt~pr CREATED_LATER
+obj=:LLMClientProxy~proxy
+obj=:ClaudeClient~llm
+obj=:AnthropicSDK~sdk
+u-&gt;&gt;&gt;gui : enter max time and portions, click Generate Recipe; on=gui
+gui-&gt;&gt;&gt;ctrl : generateRecipe(req); on=ctrl
+ctrl-&gt;&gt;&gt;hist : getTopRated(5); on=hist
+hist.&gt;ctrl : List of Recipe; off=hist
+ctrl-&gt;ctrl + : add favourites to req
+ctrl-&gt;&gt;&gt;agent : generateRecipe(req); on=agent
+agent-&gt;&gt;&gt;ptool : execute("list"); on=ptool
+ptool.&gt;agent : pantry items; off=ptool
+agent-&gt;&gt;&gt;prof : execute("get"); on=prof
+prof.&gt;agent : profile; off=prof
+agent-&gt;&gt;&gt;pb : createNewPrompt(); on=pb
+pb-&gt;&gt;&gt;pr : new Prompt()
+agent-&gt;&gt;&gt;pb : buildTask("recipe")
+pb-&gt;&gt;&gt;pr : setTask(t); on=pr
+off=pr
+agent-&gt;&gt;&gt;pb : buildContext(label, value) for request, pantry, profile, favourites
+pb-&gt;&gt;&gt;pr : addContext(line); on=pr
+off=pr
+agent-&gt;&gt;&gt;pb : buildFormat(schema)
+pb-&gt;&gt;&gt;pr : setFormat(f); on=pr
+off=pr
+agent-&gt;&gt;&gt;pb : getPrompt()
+pb.&gt;agent : Prompt; off=pb
+agent-&gt;&gt;&gt;pr : toText(); on=pr
+pr.&gt;agent : prompt text; off=pr
+agent-&gt;&gt;&gt;proxy : generate(prompt, tools); on=proxy
+proxy-&gt;proxy + : isAvailable()
+combinedFragment=alt~gen u sdk
+u:[within daily budget and LLM reachable]
+proxy-&gt;&gt;&gt;llm : generate(prompt, tools); on=llm
+llm-&gt;&gt;&gt;sdk : createMessage(params); on=sdk
+sdk.&gt;llm : response; off=sdk
+llm.&gt;proxy : LLMResponse; off=llm
+proxy.&gt;agent : LLMResponse (recipe JSON); off=proxy
+agent-&gt;agent + : parse JSON into Recipe
+agent.&gt;ctrl : Recipe; off=agent
+ctrl.&gt;gui : Recipe; off=ctrl
+gui.&gt;u : show recipe; off=gui
+..
+on=agent; on=ctrl; on=gui; on=proxy
+u:[budget reached or LLM error]
+proxy.&gt;agent : error "LLM unavailable"; off=proxy
+agent.&gt;ctrl : error; off=agent
+ctrl.&gt;gui : error; off=ctrl
+gui.&gt;u : show error message; off=gui
+--
+combinedFragment=opt~sub u sdk
+u:[user clicks Substitute (F07)]
+u-&gt;&gt;&gt;gui : click Substitute on an ingredient; on=gui
+gui-&gt;&gt;&gt;ctrl : suggestSubstitutes(recipe, ing); on=ctrl
+ctrl-&gt;&gt;&gt;agent : suggestSubstitutes(recipe, ing); on=agent
+agent-&gt;&gt;&gt;proxy : generate(prompt, tools); on=proxy
+proxy.&gt;agent : LLMResponse (options JSON); off=proxy
+agent.&gt;ctrl : List of Substitution; off=agent
+ctrl.&gt;gui : options; off=ctrl
+gui.&gt;u : show substitutes; off=gui
+--
+combinedFragment=opt~save u sdk
+u:[user saves and rates (F08)]
+u-&gt;&gt;&gt;gui : click Save, give stars; on=gui
+gui-&gt;&gt;&gt;ctrl : saveRecipe(recipe); on=ctrl
+ctrl-&gt;&gt;&gt;hist : save(recipe); on=hist
+off=hist
+gui-&gt;&gt;&gt;ctrl : rateRecipe(id, stars)
+ctrl-&gt;&gt;&gt;hist : rate(id, stars); on=hist
+off=hist
+ctrl.&gt;gui : saved; off=ctrl
+gui.&gt;u : show saved recipe; off=gui
+--</panel_attributes>
+    <additional_attributes/>
+  </element>
+</diagram>
