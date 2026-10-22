@@ -1,0 +1,29 @@
+# Local secrets - never commit real API keys
+.env
+.env.*
+!.env.example
+config.local.json
+
+# Local app data (pantry, cart, history saved while running)
+data/
+
+# Maven build output
+target/
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+out/
+bin/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
