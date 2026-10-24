@@ -79,6 +79,9 @@ java -jar target/recipe-agent-0.1.0-jar-with-dependencies.jar cli
 src/main/java/com/recipeagent/
   Main.java            entry point (GUI by default, "cli" for the CLI)
   config/AppConfig     reads .env and environment variables
+  model/               domain classes (PantryItem, Recipe, CartItem, Flyer, Notification, ...)
+  storage/JsonStorage  saves and loads data as JSON files in DATA_DIR
+  pantry/PantryManager pantry stock, expiry, deduct/restore, recipe check
 src/test/java/...      JUnit 5 tests
 UMLs/                  class, use-case and sequence diagrams (UMLet .uxf + .svg)
 ```
