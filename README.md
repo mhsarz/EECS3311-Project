@@ -82,6 +82,8 @@ src/main/java/com/recipeagent/
   model/               domain classes (PantryItem, Recipe, CartItem, Flyer, Notification, ...)
   storage/JsonStorage  saves and loads data as JSON files in DATA_DIR
   pantry/PantryManager pantry stock, expiry, deduct/restore, recipe check
+  cart/ShoppingCart    shopping list with merge and sale flags
+  history/RecipeHistory saved recipes, ratings, favourites, search, cook records
 src/test/java/...      JUnit 5 tests
 UMLs/                  class, use-case and sequence diagrams (UMLet .uxf + .svg)
 ```

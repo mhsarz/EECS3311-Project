@@ -1,5 +1,6 @@
 package com.recipeagent.model;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -20,6 +21,7 @@ public class Recipe {
     private int portions;
     private int rating;
     private boolean favourite;
+    private List<LocalDate> cookedOn;
 
     /** Creates a new, unrated recipe with a generated id. */
     public Recipe(String title, List<Ingredient> ingredients, List<String> steps,
@@ -38,6 +40,7 @@ public class Recipe {
         this.portions = Validation.requirePositive(portions, "Portions");
         this.rating = UNRATED;
         this.favourite = false;
+        this.cookedOn = new ArrayList<>();
     }
 
     public String getId() {
@@ -96,6 +99,46 @@ public class Recipe {
     public boolean toggleFavourite() {
         favourite = !favourite;
         return favourite;
+    }
+
+    /** Records that the user cooked this recipe on {@code date} (F06). */
+    public void recordCooked(LocalDate date) {
+        if (date == null) {
+            throw new IllegalArgumentException("Cook date must not be null");
+        }
+        cookDates().add(date);
+    }
+
+    /**
+     * Removes the most recent cook record, used when Mark as Cooked is undone (F06).
+     *
+     * @return true if there was a record to remove
+     */
+    public boolean removeLastCooked() {
+        List<LocalDate> dates = cookDates();
+        if (dates.isEmpty()) {
+            return false;
+        }
+        dates.remove(dates.size() - 1);
+        return true;
+    }
+
+    public int getTimesCooked() {
+        return cookDates().size();
+    }
+
+    /** The last date this recipe was cooked, or null if never. */
+    public LocalDate getLastCooked() {
+        List<LocalDate> dates = cookDates();
+        return dates.isEmpty() ? null : dates.get(dates.size() - 1);
+    }
+
+    /** Older saved files have no cook list, so create it when first needed. */
+    private List<LocalDate> cookDates() {
+        if (cookedOn == null) {
+            cookedOn = new ArrayList<>();
+        }
+        return cookedOn;
     }
 
     /** True if the title or any ingredient name contains {@code query}, ignoring case (F08 search). */
