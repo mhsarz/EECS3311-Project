@@ -84,6 +84,8 @@ src/main/java/com/recipeagent/
   pantry/PantryManager pantry stock, expiry, deduct/restore, recipe check
   cart/ShoppingCart    shopping list with merge and sale flags
   history/RecipeHistory saved recipes, ratings, favourites, search, cook records
+  command/             Command, CookRecipeCommand, CommandHistory (mark as cooked + undo)
+  notify/              NotificationCenter (Singleton) and NotificationListener
 src/test/java/...      JUnit 5 tests
 UMLs/                  class, use-case and sequence diagrams (UMLet .uxf + .svg)
 ```
