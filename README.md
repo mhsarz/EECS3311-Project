@@ -90,6 +90,7 @@ src/main/java/com/recipeagent/
   llm/                 LLMClient (interface), ClaudeClient (Adapter), AnthropicApi (HTTP client
                        for the Anthropic Messages API), LLMClientProxy (Proxy: daily limit,
                        error handling, usage counting)
+  prompt/              Prompt, PromptBuilder, ClaudePromptBuilder, PlainPromptBuilder (Builder)
 src/test/java/...      JUnit 5 tests
 UMLs/                  class, use-case and sequence diagrams (UMLet .uxf + .svg)
 ```
