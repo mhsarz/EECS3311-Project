@@ -65,6 +65,15 @@ class AppConfigTest {
     }
 
     @Test
+    void readsFileSavedWithBomAndWindowsLineEndings() throws IOException {
+        Path f = tmp.resolve(".env");
+        Files.write(f, "﻿LLM_API_KEY=abc\r\nLLM_MODEL=m\r\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        AppConfig c = AppConfig.load(f, Map.of());
+        assertEquals("abc", c.getApiKey().orElseThrow());
+        assertEquals("m", c.getModel());
+    }
+
+    @Test
     void toStringNeverShowsKey() throws IOException {
         AppConfig c = AppConfig.load(writeEnv("LLM_API_KEY=secret-value"), Map.of());
         assertFalse(c.toString().contains("secret-value"));

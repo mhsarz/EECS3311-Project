@@ -61,11 +61,15 @@ public final class AppConfig {
         return new AppConfig(merged);
     }
 
-    /** Parses KEY=VALUE lines. Blank lines and lines starting with # are ignored. */
+    /**
+     * Parses KEY=VALUE lines. Blank lines and lines starting with # are ignored.
+     * A UTF-8 byte order mark (added by some Windows editors) is removed first,
+     * otherwise the first key would not be recognized.
+     */
     static Map<String, String> parse(List<String> lines) {
         Map<String, String> result = new HashMap<>();
         for (String raw : lines) {
-            String line = raw.trim();
+            String line = raw.replace("﻿", "").trim();
             if (line.isEmpty() || line.startsWith("#")) {
                 continue;
             }

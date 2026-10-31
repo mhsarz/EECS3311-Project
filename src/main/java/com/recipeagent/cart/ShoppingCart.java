@@ -27,9 +27,14 @@ public class ShoppingCart {
         this.items = new ArrayList<>();
         if (initialItems != null) {
             for (CartItem item : initialItems) {
-                if (item != null) {
-                    addOrMerge(item);
+                if (item == null) {
+                    continue;
                 }
+                if (item.getName() == null) {
+                    System.err.println("Warning: skipped a saved cart item with no name");
+                    continue;
+                }
+                addOrMerge(item);
             }
         }
     }

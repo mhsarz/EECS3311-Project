@@ -39,6 +39,8 @@ public class JsonStorage {
     public static Gson createGson() {
         return new GsonBuilder()
                 .registerTypeAdapter(java.time.LocalDate.class, new LocalDateAdapter().nullSafe())
+                .registerTypeAdapter(com.recipeagent.model.StorageLocation.class,
+                        new StorageLocationAdapter().nullSafe())
                 .setPrettyPrinting()
                 .create();
     }
@@ -54,9 +56,10 @@ public class JsonStorage {
      */
     public void save(String key, Object data) {
         Path target = fileFor(key);
+        Path tmp = null;
         try {
             Files.createDirectories(folder);
-            Path tmp = Files.createTempFile(folder, key, ".tmp");
+            tmp = Files.createTempFile(folder, key, ".tmp");
             Files.writeString(tmp, gson.toJson(data), StandardCharsets.UTF_8);
             try {
                 Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING,
@@ -65,6 +68,7 @@ public class JsonStorage {
                 Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
             }
         } catch (IOException e) {
+            deleteQuietly(tmp);
             throw new StorageException("Could not save '" + key + "' to " + target, e);
         }
     }
@@ -99,6 +103,18 @@ public class JsonStorage {
         Type listType = TypeToken.getParameterized(List.class, elementType).getType();
         List<T> result = load(key, listType);
         return result == null ? new java.util.ArrayList<>() : new java.util.ArrayList<>(result);
+    }
+
+    /** Removes a leftover temporary file after a failed save. */
+    private static void deleteQuietly(Path tmp) {
+        if (tmp == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(tmp);
+        } catch (IOException ignored) {
+            // the failed save is already being reported
+        }
     }
 
     public boolean exists(String key) {

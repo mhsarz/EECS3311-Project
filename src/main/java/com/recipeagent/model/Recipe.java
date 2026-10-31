@@ -52,10 +52,13 @@ public class Recipe {
     }
 
     public List<Ingredient> getIngredients() {
-        return Collections.unmodifiableList(ingredients);
+        return Collections.unmodifiableList(ingredientList());
     }
 
     public List<String> getSteps() {
+        if (steps == null) {
+            steps = new ArrayList<>();
+        }
         return Collections.unmodifiableList(steps);
     }
 
@@ -133,6 +136,14 @@ public class Recipe {
         return dates.isEmpty() ? null : dates.get(dates.size() - 1);
     }
 
+    /** A saved file may leave out the ingredient list, so create it when first needed. */
+    private List<Ingredient> ingredientList() {
+        if (ingredients == null) {
+            ingredients = new ArrayList<>();
+        }
+        return ingredients;
+    }
+
     /** Older saved files have no cook list, so create it when first needed. */
     private List<LocalDate> cookDates() {
         if (cookedOn == null) {
@@ -150,7 +161,7 @@ public class Recipe {
         if (title.toLowerCase(Locale.ROOT).contains(q)) {
             return true;
         }
-        for (Ingredient i : ingredients) {
+        for (Ingredient i : ingredientList()) {
             if (i.getName().toLowerCase(Locale.ROOT).contains(q)) {
                 return true;
             }

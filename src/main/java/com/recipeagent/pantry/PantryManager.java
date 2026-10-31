@@ -36,7 +36,14 @@ public class PantryManager {
         this.items = new ArrayList<>();
         if (initialItems != null) {
             for (PantryItem item : initialItems) {
-                if (item != null && items.stream().noneMatch(i -> i.hasName(item.getName()))) {
+                if (item == null) {
+                    continue;
+                }
+                if (item.getId() == null || item.getName() == null || item.getLocation() == null) {
+                    System.err.println("Warning: skipped a saved pantry item with a missing id, name or location");
+                    continue;
+                }
+                if (items.stream().noneMatch(i -> i.hasName(item.getName()))) {
                     items.add(item);
                 }
             }

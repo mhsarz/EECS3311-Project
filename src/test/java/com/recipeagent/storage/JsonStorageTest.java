@@ -91,6 +91,31 @@ class JsonStorageTest {
     }
 
     @Test
+    void readsLocationIgnoringCase() throws IOException {
+        Files.writeString(tmp.resolve("pantry.json"),
+                "[{\"id\":\"1\",\"name\":\"milk\",\"quantity\":1,\"unit\":\"L\",\"location\":\"fridge\"}]");
+        List<PantryItem> items = new JsonStorage(tmp).loadList("pantry", PantryItem.class);
+        assertEquals(StorageLocation.FRIDGE, items.get(0).getLocation());
+    }
+
+    @Test
+    void unknownLocationThrowsStorageException() throws IOException {
+        Files.writeString(tmp.resolve("pantry.json"),
+                "[{\"id\":\"1\",\"name\":\"milk\",\"quantity\":1,\"unit\":\"L\",\"location\":\"garage\"}]");
+        JsonStorage storage = new JsonStorage(tmp);
+        StorageException e = assertThrows(StorageException.class,
+                () -> storage.loadList("pantry", PantryItem.class));
+        assertTrue(e.getMessage().contains("garage"));
+    }
+
+    @Test
+    void savesLocationAsUpperCaseName() throws IOException {
+        JsonStorage storage = new JsonStorage(tmp);
+        storage.save("pantry", List.of(new PantryItem("peas", 1, "bag", StorageLocation.FREEZER, null)));
+        assertTrue(Files.readString(tmp.resolve("pantry.json")).contains("\"FREEZER\""));
+    }
+
+    @Test
     void leavesNoTempFilesBehind() throws IOException {
         JsonStorage storage = new JsonStorage(tmp);
         storage.save("cart", List.of("milk"));

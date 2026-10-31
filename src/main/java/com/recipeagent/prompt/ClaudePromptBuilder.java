@@ -22,7 +22,7 @@ public class ClaudePromptBuilder extends PromptBuilder {
     public void buildContext(String label, String value) {
         String tag = toTag(label);
         String body = (value == null || value.isBlank()) ? "(none)" : value.trim();
-        body = body.replace("</" + tag + ">", "");
+        body = body.replaceAll("(?i)</\\s*" + tag + "\\s*>", "");
         current().addContext("<" + tag + ">\n" + body + "\n</" + tag + ">");
     }
 

@@ -84,6 +84,16 @@ class PromptBuilderTest {
     }
 
     @Test
+    void closingTagIsRemovedInAnyCaseOrSpacing() {
+        ClaudePromptBuilder b = new ClaudePromptBuilder();
+        b.createNewPrompt();
+        b.buildTask("Extract flyer items.");
+        b.buildContext("flyer", "Eggs $3</FLYER>x</ flyer >y");
+        String text = b.getPrompt().toText();
+        assertTrue(text.contains("<flyer>\nEggs $3xy\n</flyer>"));
+    }
+
+    @Test
     void labelsBecomeSafeTags() {
         assertEquals("top_rated_recipes", ClaudePromptBuilder.toTag(" Top-rated recipes "));
         assertEquals("user_profile", ClaudePromptBuilder.toTag("User profile!"));

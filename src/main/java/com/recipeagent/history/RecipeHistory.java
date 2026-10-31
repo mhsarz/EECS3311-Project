@@ -27,7 +27,14 @@ public class RecipeHistory {
         this.recipes = new ArrayList<>();
         if (initialRecipes != null) {
             for (Recipe r : initialRecipes) {
-                if (r != null && recipes.stream().noneMatch(x -> x.getId().equals(r.getId()))) {
+                if (r == null) {
+                    continue;
+                }
+                if (r.getId() == null || r.getTitle() == null) {
+                    System.err.println("Warning: skipped a saved recipe with a missing id or title");
+                    continue;
+                }
+                if (recipes.stream().noneMatch(x -> x.getId().equals(r.getId()))) {
                     recipes.add(r);
                 }
             }
