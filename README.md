@@ -87,6 +87,9 @@ src/main/java/com/recipeagent/
   command/             Command, CookRecipeCommand, CommandHistory (mark as cooked + undo)
   notify/              NotificationCenter (Singleton) and NotificationListener
   agent/AgentTool      interface for tools the agent can call
+  agent/RecipeAgent    the AI agent: recipe generation (F01) and substitutes (F07),
+                       checks every LLM reply and retries once with feedback
+  agent/tools/         PantryTool, ProfileTool (what the agent can read)
   llm/                 LLMClient (interface), ClaudeClient (Adapter), AnthropicApi (HTTP client
                        for the Anthropic Messages API), LLMClientProxy (Proxy: daily limit,
                        error handling, usage counting)
