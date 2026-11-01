@@ -35,6 +35,10 @@ import java.util.Map;
  * rejected, and the agent asks the LLM again once, telling it what was wrong.
  * Substitutes that contain allergens are dropped, and "in stock" is checked against the
  * real pantry instead of taking the LLM's word for it.
+ * <p>
+ * In chat (F09) the agent runs a tool-use loop: the LLM plans which tools to call, the
+ * agent runs them and sends the results back, up to a limit per message, and the
+ * conversation is remembered for the session.
  */
 public class RecipeAgent {
 
@@ -49,9 +53,23 @@ public class RecipeAgent {
     static final String SUBSTITUTE_FORMAT = "{\"substitutes\": [{\"substitute\": string, "
             + "\"note\": string, \"pantry_items\": [string]}]}";
 
+    /** Most tool calls the agent may make while answering one chat message (F09). */
+    public static final int DEFAULT_MAX_TOOL_CALLS = 5;
+    /** How many earlier chat lines are included in the prompt. */
+    static final int HISTORY_IN_PROMPT = 30;
+    /** Tool results longer than this are shortened in the conversation memory. */
+    static final int MAX_RESULT_IN_HISTORY = 300;
+
+    /** Message the interface sends when the user clicks Help Me Set Up (F04). */
+    public static final String PROFILE_SETUP_MESSAGE =
+            "Please help me set up my food preference profile.";
+
     private final LLMClient llm;
     private final PromptBuilder builder;
     private final Map<String, AgentTool> tools = new LinkedHashMap<>();
+    private final List<String> chatHistory = new ArrayList<>();
+    private final int maxToolCalls;
+    private List<AgentAction> lastActions = List.of();
 
     /**
      * @param llm     the LLM client (normally an LLMClientProxy)
@@ -59,11 +77,20 @@ public class RecipeAgent {
      * @param tools   the tools the agent can use; must include "pantry" and "profile"
      */
     public RecipeAgent(LLMClient llm, PromptBuilder builder, List<AgentTool> tools) {
+        this(llm, builder, tools, DEFAULT_MAX_TOOL_CALLS);
+    }
+
+    /** Same as above with a different limit on tool calls per chat message. */
+    public RecipeAgent(LLMClient llm, PromptBuilder builder, List<AgentTool> tools, int maxToolCalls) {
         if (llm == null || builder == null || tools == null) {
             throw new IllegalArgumentException("LLM client, prompt builder and tools are required");
         }
+        if (maxToolCalls <= 0) {
+            throw new IllegalArgumentException("maxToolCalls must be more than zero");
+        }
         this.llm = llm;
         this.builder = builder;
+        this.maxToolCalls = maxToolCalls;
         for (AgentTool t : tools) {
             if (t != null) {
                 this.tools.put(t.getName(), t);
@@ -287,6 +314,127 @@ public class RecipeAgent {
             result.add(new Substitution(name, note, inStock));
         }
         return result;
+    }
+
+    // ------------------------------------------------------------------ F09 / F04
+
+    /**
+     * Answers a chat message (F09). The LLM decides which tools to use; the agent runs
+     * each requested tool and sends the result back, until the LLM gives a final answer.
+     * At most {@code maxToolCalls} tools are run per message; after that the LLM is asked
+     * to answer with what it found so far. The conversation is remembered for the session,
+     * which is also how the profile questionnaire (F04) works: the LLM asks one question
+     * per message and finally saves the profile through the profile tool.
+     *
+     * @return the agent's answer; the tool calls it made are in {@link #getLastActions()}
+     * @throws LLMUnavailableException if the LLM cannot be used
+     */
+    public String chat(String message) {
+        if (message == null || message.isBlank()) {
+            throw new IllegalArgumentException("Message must not be empty");
+        }
+        chatHistory.add("User: " + message.trim());
+        List<AgentAction> actions = new ArrayList<>();
+        List<AgentTool> toolList = new ArrayList<>(tools.values());
+        try {
+            while (true) {
+                boolean limitReached = actions.size() >= maxToolCalls;
+                Prompt prompt = buildChatPrompt(limitReached);
+                LLMResponse reply = llm.generate(prompt.toText(), limitReached ? List.of() : toolList);
+
+                if (reply.hasToolCall() && !limitReached) {
+                    AgentAction action = runTool(reply.getToolName(), reply.getToolArgs());
+                    actions.add(action);
+                    chatHistory.add("Tool " + action.tool() + " " + action.args() + " -> "
+                            + shorten(action.result(), MAX_RESULT_IN_HISTORY));
+                    continue;
+                }
+                String answer = reply.getText().isBlank()
+                        ? "Sorry, I could not come up with an answer. Please try asking another way."
+                        : reply.getText().trim();
+                chatHistory.add("Assistant: " + answer);
+                return answer;
+            }
+        } finally {
+            // Even if the LLM fails part-way, report the changes that were already made.
+            lastActions = Collections.unmodifiableList(actions);
+        }
+    }
+
+    /** Starts the profile questionnaire (F04); returns the agent's first question. */
+    public String startProfileSetup() {
+        return chat(PROFILE_SETUP_MESSAGE);
+    }
+
+    /** Tool calls made while answering the most recent chat message. */
+    public List<AgentAction> getLastActions() {
+        return lastActions;
+    }
+
+    /** The conversation so far (read-only), oldest first. */
+    public List<String> getChatHistory() {
+        return Collections.unmodifiableList(chatHistory);
+    }
+
+    /** Forgets the conversation, e.g. when the user starts a new chat. */
+    public void clearChat() {
+        chatHistory.clear();
+        lastActions = List.of();
+    }
+
+    public int getMaxToolCalls() {
+        return maxToolCalls;
+    }
+
+    private Prompt buildChatPrompt(boolean limitReached) {
+        builder.createNewPrompt();
+        builder.buildTask("You are the assistant inside a recipe and grocery app for students and busy "
+                + "people. Help with cooking ideas, the pantry, expiring food and the shopping cart.\n"
+                + "- Use the tools to look things up or make changes instead of guessing. You can call "
+                + "one tool at a time, and at most " + maxToolCalls + " per user message.\n"
+                + "- Only add to or remove from the cart, or save the profile, when the user asks for it.\n"
+                + "- If the request is unclear, ask one short clarifying question instead of guessing.\n"
+                + "- Answer in short, plain sentences (no JSON). Say what you changed, if anything.\n"
+                + "- Profile set-up: when the user asks for help setting up their profile, ask one "
+                + "question per message (diet, allergies, dislikes, usual number of portions, and a "
+                + "few more if useful; about 6 in total). When you have enough answers, save them with "
+                + "the profile tool (action 'save') and tell the user what you saved.");
+        int from = Math.max(0, chatHistory.size() - HISTORY_IN_PROMPT);
+        builder.buildContext("conversation", String.join("\n", chatHistory.subList(from, chatHistory.size())));
+        if (limitReached) {
+            builder.buildContext("note", "You have used all " + maxToolCalls + " tool calls for this "
+                    + "message. Do not ask for more tools. Answer now with what you have found so far.");
+        }
+        return builder.getPrompt();
+    }
+
+    /** Runs one tool for the LLM. Errors are returned as text so the LLM can react to them. */
+    private AgentAction runTool(String name, String args) {
+        AgentTool tool = tools.get(name);
+        String result;
+        if (tool == null) {
+            result = errorJson("there is no tool named '" + name + "'");
+        } else {
+            try {
+                result = tool.execute(args);
+            } catch (RuntimeException e) {
+                result = errorJson("the tool failed: " + e.getMessage());
+            }
+            if (result == null) {
+                result = "{}";
+            }
+        }
+        return new AgentAction(name, args == null ? "{}" : args, result);
+    }
+
+    private static String errorJson(String message) {
+        JsonObject o = new JsonObject();
+        o.addProperty("error", message);
+        return o.toString();
+    }
+
+    private static String shorten(String s, int max) {
+        return s.length() <= max ? s : s.substring(0, max) + "...";
     }
 
     // ------------------------------------------------------------------ helpers

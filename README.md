@@ -88,8 +88,9 @@ src/main/java/com/recipeagent/
   notify/              NotificationCenter (Singleton) and NotificationListener
   agent/AgentTool      interface for tools the agent can call
   agent/RecipeAgent    the AI agent: recipe generation (F01) and substitutes (F07),
-                       checks every LLM reply and retries once with feedback
-  agent/tools/         PantryTool, ProfileTool (what the agent can read)
+                       checks every LLM reply and retries once with feedback;
+                       chat with a tool-use loop (F09) and profile questionnaire (F04)
+  agent/tools/         PantryTool, ProfileTool, CartTool (what the agent can use)
   llm/                 LLMClient (interface), ClaudeClient (Adapter), AnthropicApi (HTTP client
                        for the Anthropic Messages API), LLMClientProxy (Proxy: daily limit,
                        error handling, usage counting)

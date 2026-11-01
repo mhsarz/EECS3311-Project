@@ -80,7 +80,64 @@ class ToolsTest {
         assertEquals("soy", o.getAsJsonArray("allergies").get(0).getAsString());
         assertEquals("olives", o.getAsJsonArray("dislikes").get(0).getAsString());
         assertEquals(2, o.get("default_portions").getAsInt());
-        assertTrue(json(tool.execute("{\"action\":\"save\"}")).has("error"));
+        assertTrue(json(tool.execute("{\"action\":\"delete\"}")).has("error"));
+    }
+
+    @Test
+    void profileSaveChangesOnlyGivenFields() {
+        UserProfile p = new UserProfile();
+        p.addDislike("olives");
+        ProfileTool tool = new ProfileTool(p);
+        JsonObject o = json(tool.execute("{\"action\":\"save\",\"diet\":\"Vegetarian\","
+                + "\"allergies\":[\"Peanuts\",\" \"],\"default_portions\":3}"));
+        assertTrue(o.get("saved").getAsBoolean());
+        assertEquals("vegetarian", p.getDiet());
+        assertEquals(java.util.List.of("peanuts"), p.getAllergies());
+        assertEquals(java.util.List.of("olives"), p.getDislikes());   // not given, so unchanged
+        assertEquals(3, p.getDefaultPortions());
+        tool.execute("{\"action\":\"save\",\"allergies\":\"shellfish\"}");
+        assertEquals(java.util.List.of("shellfish"), p.getAllergies());
+    }
+
+    @Test
+    void profileSaveRejectsBadPortionsWithoutChangingAnything() {
+        UserProfile p = new UserProfile();
+        ProfileTool tool = new ProfileTool(p);
+        JsonObject o = json(tool.execute("{\"action\":\"save\",\"diet\":\"vegan\",\"default_portions\":0}"));
+        assertTrue(o.has("error"));
+        assertEquals(UserProfile.NO_DIET, p.getDiet());
+        assertEquals(UserProfile.DEFAULT_PORTIONS, p.getDefaultPortions());
+    }
+
+    @Test
+    void cartToolAddsListsAndRemoves() {
+        com.recipeagent.cart.ShoppingCart cart = new com.recipeagent.cart.ShoppingCart();
+        com.recipeagent.agent.tools.CartTool tool = new com.recipeagent.agent.tools.CartTool(cart);
+
+        JsonObject added = json(tool.execute("{\"action\":\"add\",\"name\":\"eggs\",\"quantity\":12}"));
+        assertEquals("eggs", added.get("added").getAsString());
+        assertEquals(12, added.get("quantity_in_cart").getAsInt());
+        json(tool.execute("{\"action\":\"add\",\"name\":\"Eggs\"}"));
+        assertEquals(13, cart.find("eggs").orElseThrow().getQuantity());
+
+        JsonObject list = json(tool.execute("list"));
+        assertEquals(1, list.getAsJsonArray("items").size());
+        assertFalse(list.getAsJsonArray("items").get(0).getAsJsonObject().get("on_sale").getAsBoolean());
+
+        assertTrue(json(tool.execute("{\"action\":\"remove\",\"name\":\"EGGS\"}")).get("removed").getAsBoolean());
+        assertFalse(json(tool.execute("{\"action\":\"remove\",\"name\":\"eggs\"}")).get("removed").getAsBoolean());
+        assertTrue(cart.isEmpty());
+    }
+
+    @Test
+    void cartToolReportsBadInputAsError() {
+        com.recipeagent.agent.tools.CartTool tool =
+                new com.recipeagent.agent.tools.CartTool(new com.recipeagent.cart.ShoppingCart());
+        assertTrue(json(tool.execute("{\"action\":\"add\"}")).has("error"));
+        assertTrue(json(tool.execute("{\"action\":\"add\",\"name\":\"milk\",\"quantity\":-2}")).has("error"));
+        assertTrue(json(tool.execute("{\"action\":\"remove\"}")).has("error"));
+        assertTrue(json(tool.execute("{\"action\":\"buy\"}")).has("error"));
+        assertTrue(JsonParser.parseString(tool.getInputSchema()).isJsonObject());
     }
 
     @Test

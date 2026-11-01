@@ -61,6 +61,46 @@ public final class ToolArgs {
         }
     }
 
+    /** A number argument, or {@code fallback} if missing or not a number. */
+    public double getDouble(String key, double fallback) {
+        JsonElement el = json.get(key);
+        if (el == null || el.isJsonNull() || !el.isJsonPrimitive()) {
+            return fallback;
+        }
+        try {
+            return el.getAsDouble();
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
+    }
+
+    /** True if the argument is present (even if empty). */
+    public boolean has(String key) {
+        return json.has(key) && !json.get(key).isJsonNull();
+    }
+
+    /**
+     * A list of strings, or null if the argument is missing. A single string is
+     * treated as a one-item list; blank entries are skipped.
+     */
+    public java.util.List<String> getStringList(String key) {
+        JsonElement el = json.get(key);
+        if (el == null || el.isJsonNull()) {
+            return null;
+        }
+        java.util.List<String> result = new java.util.ArrayList<>();
+        if (el.isJsonArray()) {
+            for (JsonElement item : el.getAsJsonArray()) {
+                if (item.isJsonPrimitive() && !item.getAsString().isBlank()) {
+                    result.add(item.getAsString().trim());
+                }
+            }
+        } else if (el.isJsonPrimitive() && !el.getAsString().isBlank()) {
+            result.add(el.getAsString().trim());
+        }
+        return result;
+    }
+
     /** The "action" argument in lower case, or {@code fallback}. */
     public String action(String fallback) {
         return getString("action", fallback).toLowerCase(java.util.Locale.ROOT);
