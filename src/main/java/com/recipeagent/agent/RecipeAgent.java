@@ -39,6 +39,10 @@ import java.util.Map;
  * In chat (F09) the agent runs a tool-use loop: the LLM plans which tools to call, the
  * agent runs them and sends the results back, up to a limit per message, and the
  * conversation is remembered for the session.
+ * <p>
+ * The public methods are synchronized: the GUI runs LLM calls in background threads, and
+ * the agent shares one prompt builder and one conversation, so two requests at the same
+ * time (e.g. Generate Recipe while a chat answer is coming) must not mix their prompts.
  */
 public class RecipeAgent {
 
@@ -57,8 +61,14 @@ public class RecipeAgent {
     public static final int DEFAULT_MAX_TOOL_CALLS = 5;
     /** How many earlier chat lines are included in the prompt. */
     static final int HISTORY_IN_PROMPT = 30;
-    /** Tool results longer than this are shortened in the conversation memory. */
-    static final int MAX_RESULT_IN_HISTORY = 300;
+    /**
+     * Tool results from earlier messages are shortened to this length in the prompt.
+     * Results from the message being answered are always sent in full.
+     */
+    static final int MAX_OLD_RESULT_IN_PROMPT = 300;
+    /** The conversation memory keeps at most this many lines (oldest are dropped). */
+    static final int MAX_HISTORY_LINES = 200;
+    static final String TOOL_LINE_PREFIX = "Tool ";
 
     /** Message the interface sends when the user clicks Help Me Set Up (F04). */
     public static final String PROFILE_SETUP_MESSAGE =
@@ -114,7 +124,7 @@ public class RecipeAgent {
      * @throws LLMUnavailableException if the LLM cannot be used
      * @throws LLMException            if the LLM's replies could not be used after a retry
      */
-    public Recipe generateRecipe(RecipeRequest req) {
+    public synchronized Recipe generateRecipe(RecipeRequest req) {
         if (req == null) {
             throw new IllegalArgumentException("Recipe request must not be null");
         }
@@ -215,7 +225,7 @@ public class RecipeAgent {
      * @throws LLMUnavailableException  if the LLM cannot be used
      * @throws LLMException             if the LLM's replies could not be used after a retry
      */
-    public List<Substitution> suggestSubstitutes(Recipe recipe, String ingredient) {
+    public synchronized List<Substitution> suggestSubstitutes(Recipe recipe, String ingredient) {
         if (recipe == null || ingredient == null || ingredient.isBlank()) {
             throw new IllegalArgumentException("Recipe and ingredient are required");
         }
@@ -329,64 +339,83 @@ public class RecipeAgent {
      * @return the agent's answer; the tool calls it made are in {@link #getLastActions()}
      * @throws LLMUnavailableException if the LLM cannot be used
      */
-    public String chat(String message) {
+    public synchronized String chat(String message) {
         if (message == null || message.isBlank()) {
             throw new IllegalArgumentException("Message must not be empty");
         }
         chatHistory.add("User: " + message.trim());
+        int turnStart = chatHistory.size() - 1;
         List<AgentAction> actions = new ArrayList<>();
         List<AgentTool> toolList = new ArrayList<>(tools.values());
+        boolean answered = false;
         try {
             while (true) {
                 boolean limitReached = actions.size() >= maxToolCalls;
-                Prompt prompt = buildChatPrompt(limitReached);
+                Prompt prompt = buildChatPrompt(limitReached, turnStart);
                 LLMResponse reply = llm.generate(prompt.toText(), limitReached ? List.of() : toolList);
 
                 if (reply.hasToolCall() && !limitReached) {
                     AgentAction action = runTool(reply.getToolName(), reply.getToolArgs());
                     actions.add(action);
-                    chatHistory.add("Tool " + action.tool() + " " + action.args() + " -> "
-                            + shorten(action.result(), MAX_RESULT_IN_HISTORY));
+                    chatHistory.add(TOOL_LINE_PREFIX + action.tool() + " " + action.args() + " -> "
+                            + action.result());
                     continue;
                 }
                 String answer = reply.getText().isBlank()
                         ? "Sorry, I could not come up with an answer. Please try asking another way."
                         : reply.getText().trim();
                 chatHistory.add("Assistant: " + answer);
+                answered = true;
                 return answer;
             }
         } finally {
+            if (!answered) {
+                // Keep the conversation readable for the next message.
+                chatHistory.add("Assistant: (no answer, the AI was unavailable)");
+            }
             // Even if the LLM fails part-way, report the changes that were already made.
             lastActions = Collections.unmodifiableList(actions);
+            trimHistory();
         }
     }
 
     /** Starts the profile questionnaire (F04); returns the agent's first question. */
-    public String startProfileSetup() {
+    public synchronized String startProfileSetup() {
         return chat(PROFILE_SETUP_MESSAGE);
     }
 
     /** Tool calls made while answering the most recent chat message. */
-    public List<AgentAction> getLastActions() {
+    public synchronized List<AgentAction> getLastActions() {
         return lastActions;
     }
 
-    /** The conversation so far (read-only), oldest first. */
-    public List<String> getChatHistory() {
-        return Collections.unmodifiableList(chatHistory);
+    /** A copy of the conversation so far, oldest first. */
+    public synchronized List<String> getChatHistory() {
+        return List.copyOf(chatHistory);
     }
 
     /** Forgets the conversation, e.g. when the user starts a new chat. */
-    public void clearChat() {
+    public synchronized void clearChat() {
         chatHistory.clear();
         lastActions = List.of();
+    }
+
+    private void trimHistory() {
+        int extra = chatHistory.size() - MAX_HISTORY_LINES;
+        if (extra > 0) {
+            chatHistory.subList(0, extra).clear();
+        }
     }
 
     public int getMaxToolCalls() {
         return maxToolCalls;
     }
 
-    private Prompt buildChatPrompt(boolean limitReached) {
+    /**
+     * Builds the chat prompt. Lines from {@code turnStart} on belong to the message being
+     * answered and are sent in full; long tool results from earlier messages are shortened.
+     */
+    private Prompt buildChatPrompt(boolean limitReached, int turnStart) {
         builder.createNewPrompt();
         builder.buildTask("You are the assistant inside a recipe and grocery app for students and busy "
                 + "people. Help with cooking ideas, the pantry, expiring food and the shopping cart.\n"
@@ -399,8 +428,16 @@ public class RecipeAgent {
                 + "question per message (diet, allergies, dislikes, usual number of portions, and a "
                 + "few more if useful; about 6 in total). When you have enough answers, save them with "
                 + "the profile tool (action 'save') and tell the user what you saved.");
-        int from = Math.max(0, chatHistory.size() - HISTORY_IN_PROMPT);
-        builder.buildContext("conversation", String.join("\n", chatHistory.subList(from, chatHistory.size())));
+        int from = Math.max(0, Math.min(turnStart, chatHistory.size() - HISTORY_IN_PROMPT));
+        List<String> lines = new ArrayList<>();
+        for (int i = from; i < chatHistory.size(); i++) {
+            String line = chatHistory.get(i);
+            if (i < turnStart && line.startsWith(TOOL_LINE_PREFIX)) {
+                line = shorten(line, MAX_OLD_RESULT_IN_PROMPT);
+            }
+            lines.add(line);
+        }
+        builder.buildContext("conversation", String.join("\n", lines));
         if (limitReached) {
             builder.buildContext("note", "You have used all " + maxToolCalls + " tool calls for this "
                     + "message. Do not ask for more tools. Answer now with what you have found so far.");

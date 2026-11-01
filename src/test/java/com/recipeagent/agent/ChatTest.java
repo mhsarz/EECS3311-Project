@@ -193,4 +193,78 @@ class ChatTest {
                         List.of(new PantryTool(pantry), new ProfileTool(profile)), 0));
         assertEquals(RecipeAgent.DEFAULT_MAX_TOOL_CALLS, a.getMaxToolCalls());
     }
+
+    @Test
+    void fullToolResultIsSentInSameMessageAndShortenedLater() {
+        for (String n : List.of("rice", "eggs", "spinach", "onions", "garlic", "tomatoes", "carrots")) {
+            pantry.addItem(new PantryItem(n, 1, "kg", StorageLocation.PANTRY, null));
+        }
+        ScriptedLLM llm = new ScriptedLLM()
+                .then(LLMResponse.toolCall("pantry", "list"))
+                .then(LLMResponse.text("You could make a vegetable fried rice."))
+                .then(LLMResponse.text("You're welcome!"));
+        RecipeAgent a = agent(llm);
+
+        a.chat("What can I make with what I have?");
+        assertTrue(a.getLastActions().get(0).result().length() > RecipeAgent.MAX_OLD_RESULT_IN_PROMPT);
+        String sameMessage = llm.prompts.get(1);
+        assertTrue(sameMessage.contains("\"name\":\"carrots\""));    // the last item is not cut off
+
+        a.chat("Thanks");
+        String nextMessage = llm.prompts.get(2);
+        assertFalse(nextMessage.contains("\"name\":\"carrots\""));   // old result shortened
+        assertTrue(nextMessage.contains("Tool pantry list -> "));
+        assertTrue(a.getChatHistory().get(1).contains("\"name\":\"carrots\""));  // kept in full in memory
+    }
+
+    @Test
+    void failedMessageIsMarkedSoTheConversationStaysReadable() {
+        ScriptedLLM llm = new ScriptedLLM().then(LLMResponse.text("unused"));
+        llm.failOnCall = 1;
+        RecipeAgent a = agent(llm);
+        assertThrows(LLMUnavailableException.class, () -> a.chat("What's expiring?"));
+        assertEquals(List.of("User: What's expiring?", "Assistant: (no answer, the AI was unavailable)"),
+                a.getChatHistory());
+    }
+
+    @Test
+    void conversationMemoryIsLimited() {
+        ScriptedLLM llm = new ScriptedLLM();
+        RecipeAgent a = agent(llm);
+        for (int i = 0; i < 150; i++) {
+            a.chat("message " + i);
+        }
+        List<String> history = a.getChatHistory();
+        assertEquals(RecipeAgent.MAX_HISTORY_LINES, history.size());
+        assertEquals("User: message 149", history.get(history.size() - 2));
+        assertThrows(UnsupportedOperationException.class, () -> history.add("x"));
+    }
+
+    @Test
+    void requestsFromTwoThreadsDoNotOverlap() throws Exception {
+        java.util.concurrent.atomic.AtomicInteger inFlight = new java.util.concurrent.atomic.AtomicInteger();
+        java.util.concurrent.atomic.AtomicInteger maxInFlight = new java.util.concurrent.atomic.AtomicInteger();
+        LLMClient slow = (prompt, tools) -> {
+            maxInFlight.accumulateAndGet(inFlight.incrementAndGet(), Math::max);
+            try {
+                Thread.sleep(30);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            inFlight.decrementAndGet();
+            return LLMResponse.text("ok");
+        };
+        RecipeAgent a = agent(new ScriptedLLM());
+        RecipeAgent shared = new RecipeAgent(slow, new ClaudePromptBuilder(), List.copyOf(a.getTools().values()));
+
+        Thread t1 = new Thread(() -> shared.chat("first"));
+        Thread t2 = new Thread(() -> shared.chat("second"));
+        t1.start();
+        t2.start();
+        t1.join();
+        t2.join();
+
+        assertEquals(1, maxInFlight.get());
+        assertEquals(4, shared.getChatHistory().size());
+    }
 }
