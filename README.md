@@ -57,6 +57,10 @@ mvn test
 
 ## Run
 
+The GUI opens a window with a Pantry tab and an Alerts panel. Items that expire within
+3 days are shown in yellow, expired items in red, and an alert is listed for each of them
+when the app starts (and once a day while it stays open). Data is saved in `data/`.
+
 GUI:
 
 ```
@@ -95,6 +99,8 @@ src/main/java/com/recipeagent/
                        for the Anthropic Messages API), LLMClientProxy (Proxy: daily limit,
                        error handling, usage counting)
   prompt/              Prompt, PromptBuilder, ClaudePromptBuilder, PlainPromptBuilder (Builder)
+  controller/AgentController  the Facade used by the GUI and CLI; saves every change
+  gui/                 MainWindow (tabs + alerts panel), PantryPanel, PantryTableModel, InputParser
 src/test/java/...      JUnit 5 tests
 UMLs/                  class, use-case and sequence diagrams (UMLet .uxf + .svg)
 ```
