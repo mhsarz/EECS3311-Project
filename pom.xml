@@ -15,6 +15,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <gson.version>2.11.0</gson.version>
         <junit.version>5.11.4</junit.version>
+        <flatlaf.version>3.5.4</flatlaf.version>
         <main.class>com.recipeagent.Main</main.class>
     </properties>
 
@@ -24,6 +25,14 @@
             <groupId>com.google.code.gson</groupId>
             <artifactId>gson</artifactId>
             <version>${gson.version}</version>
+        </dependency>
+
+        <!-- Modern flat look and feel for the Swing GUI (loaded by name; the app falls back
+             to the system look and feel if it is missing) -->
+        <dependency>
+            <groupId>com.formdev</groupId>
+            <artifactId>flatlaf</artifactId>
+            <version>${flatlaf.version}</version>
         </dependency>
 
         <!-- Tests -->

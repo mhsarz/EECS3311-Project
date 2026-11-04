@@ -49,7 +49,7 @@ public class RecipePanel extends JPanel {
     private final JTextField minutesField = new JTextField("30", 4);
     private final JTextField portionsField = new JTextField(3);
     private final JCheckBox allowMissing = new JCheckBox("Allow ingredients I don't have");
-    private final JButton generateButton = new JButton("Generate Recipe (AI)");
+    private final JButton generateButton = Theme.ai("Generate Recipe", true);
     private final JLabel busyLabel = new JLabel(" ");
 
     private final JLabel titleLabel = new JLabel("No recipe yet");
@@ -58,11 +58,11 @@ public class RecipePanel extends JPanel {
     private final JTable ingredientTable = new JTable(ingredients);
     private final JTextArea stepsArea = new JTextArea(NO_RECIPE_HINT);
 
-    private final JButton substituteButton = new JButton("Substitute selected (AI)");
-    private final JButton checkButton = new JButton("Cook This: check ingredients");
-    private final JButton cookedButton = new JButton("Mark as Cooked");
-    private final JButton undoButton = new JButton("Undo");
-    private final JButton saveButton = new JButton("Save to History");
+    private final JButton substituteButton = Theme.ai("Substitute selected", false);
+    private final JButton checkButton = Theme.primary("Cook This");
+    private final JButton cookedButton = Theme.secondary("Mark as Cooked");
+    private final JButton undoButton = Theme.secondary("Undo");
+    private final JButton saveButton = Theme.secondary("Save");
 
     private transient Recipe recipe;
 
@@ -74,9 +74,12 @@ public class RecipePanel extends JPanel {
         super(new BorderLayout(8, 8));
         this.controller = controller;
         this.dataChanged = dataChanged;
-        setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        setBorder(BorderFactory.createEmptyBorder(16, 20, 12, 16));
 
-        add(buildRequestForm(), BorderLayout.NORTH);
+        JPanel north = new JPanel(new BorderLayout());
+        north.add(new PageHeader("Recipe", "A practical meal, made from what you already have."), BorderLayout.NORTH);
+        north.add(buildRequestForm(), BorderLayout.CENTER);
+        add(north, BorderLayout.NORTH);
         add(buildRecipeView(), BorderLayout.CENTER);
         add(buildActions(), BorderLayout.SOUTH);
 

@@ -3,9 +3,9 @@ package com.recipeagent;
 import com.recipeagent.config.AppConfig;
 import com.recipeagent.controller.AgentController;
 import com.recipeagent.gui.MainWindow;
+import com.recipeagent.gui.Theme;
 
 import javax.swing.SwingUtilities;
-import javax.swing.UIManager;
 import java.awt.GraphicsEnvironment;
 import java.util.Arrays;
 
@@ -42,10 +42,8 @@ public final class Main {
             return;
         }
         SwingUtilities.invokeLater(() -> {
-            try {
-                UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-            } catch (Exception e) {
-                // keep the default look and feel
+            if (!Theme.install()) {
+                System.out.println("FlatLaf look and feel not found; using the system look and feel.");
             }
             new MainWindow(controller).show();
         });

@@ -57,7 +57,10 @@ mvn test
 
 ## Run
 
-The GUI opens a window with these tabs:
+The GUI follows the "Smart Pantry" design: a header with tabs, the page in the middle, a
+**Chat** panel on the right (ask in plain language, e.g. "Add a dozen eggs to my cart"; it can be
+collapsed), the Alerts strip and a status footer. It uses the FlatLaf look and feel (a Maven
+dependency) and falls back to the system look if FlatLaf is missing. Tabs:
 
 - **Pantry**: add, merge and remove items. Items that expire within 3 days are yellow, expired items red.
 - **Recipe**: generate a recipe with the AI (time limit, portions, optional "allow ingredients I don't
@@ -109,8 +112,9 @@ src/main/java/com/recipeagent/
                        error handling, usage counting)
   prompt/              Prompt, PromptBuilder, ClaudePromptBuilder, PlainPromptBuilder (Builder)
   controller/AgentController  the Facade used by the GUI and CLI; saves every change
-  gui/                 MainWindow (tabs + alerts panel), PantryPanel, RecipePanel, HistoryPanel,
-                       table models, InputParser, Background (runs AI calls off the UI thread)
+  gui/                 MainWindow, HeaderBar, TabBar, PageHeader, ChatPanel, AlertsStrip, StatusFooter,
+                       Theme (colours, buttons), PantryPanel, RecipePanel, HistoryPanel, table models,
+                       InputParser, Background (runs AI calls off the UI thread)
 src/test/java/...      JUnit 5 tests
 UMLs/                  class, use-case and sequence diagrams (UMLet .uxf + .svg)
 ```

@@ -41,7 +41,7 @@ public class HistoryPanel extends JPanel {
     private final HistoryTableModel model = new HistoryTableModel();
     private final JTable table = new JTable(model);
     private final JTextField searchField = new JTextField(20);
-    private final JLabel countLabel = new JLabel();
+    private final PageHeader header = new PageHeader("History", "Keep your favourites close. Make a good meal again.");
     private final JLabel emptyLabel = new JLabel("", SwingConstants.CENTER);
     private final CardLayout cards = new CardLayout();
     private final JPanel center = new JPanel(cards);
@@ -57,12 +57,11 @@ public class HistoryPanel extends JPanel {
         this.controller = controller;
         this.dataChanged = dataChanged;
         this.openRecipe = openRecipe;
-        setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        setBorder(BorderFactory.createEmptyBorder(16, 20, 12, 16));
 
         JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
         top.add(new JLabel("Search by name or ingredient:"));
         top.add(searchField);
-        top.add(countLabel);
         searchField.getDocument().addDocumentListener(new DocumentListener() {
             @Override
             public void insertUpdate(DocumentEvent e) {
@@ -79,7 +78,10 @@ public class HistoryPanel extends JPanel {
                 refresh();
             }
         });
-        add(top, BorderLayout.NORTH);
+        JPanel north = new JPanel(new BorderLayout());
+        north.add(header, BorderLayout.NORTH);
+        north.add(top, BorderLayout.CENTER);
+        add(north, BorderLayout.NORTH);
 
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         table.setRowHeight(24);
@@ -97,7 +99,7 @@ public class HistoryPanel extends JPanel {
         JPanel empty = new JPanel(new GridBagLayout());
         JPanel emptyBox = new JPanel(new BorderLayout(6, 10));
         emptyBox.add(emptyLabel, BorderLayout.CENTER);
-        JButton generate = new JButton("Generate Recipe");
+        JButton generate = Theme.ai("Generate Recipe", true);
         generate.addActionListener(e -> goToGenerate.run());
         JPanel btnRow = new JPanel();
         btnRow.add(generate);
@@ -109,13 +111,13 @@ public class HistoryPanel extends JPanel {
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         actions.add(new JLabel("Stars:"));
         actions.add(starsBox);
-        JButton rate = new JButton("Rate");
+        JButton rate = Theme.secondary("Rate");
         rate.addActionListener(e -> rateSelected());
         actions.add(rate);
-        JButton fav = new JButton("Favourite on/off");
+        JButton fav = Theme.secondary("Favourite on/off");
         fav.addActionListener(e -> toggleFavouriteSelected());
         actions.add(fav);
-        JButton open = new JButton("Open in Recipe tab");
+        JButton open = Theme.primary("Open in Recipe tab");
         open.addActionListener(e -> openSelected());
         actions.add(open);
         add(actions, BorderLayout.SOUTH);
@@ -128,7 +130,7 @@ public class HistoryPanel extends JPanel {
         String query = searchField.getText();
         java.util.List<Recipe> found = controller.searchHistory(query);
         model.setRecipes(found);
-        countLabel.setText(found.size() + (found.size() == 1 ? " recipe" : " recipes"));
+        header.setRight(found.size() + (found.size() == 1 ? " recipe" : " recipes"));
         if (found.isEmpty()) {
             emptyLabel.setText(query.isBlank()
                     ? "No saved recipes yet. Generate one and click Save to History."

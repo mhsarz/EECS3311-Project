@@ -38,6 +38,7 @@ public class PantryPanel extends JPanel {
     private final PantryTableModel model = new PantryTableModel();
     private final JTable table = new JTable(model);
 
+    private final PageHeader header = new PageHeader("Pantry", "Know what you have. Use it before it goes.");
     private final JTextField nameField = new JTextField(14);
     private final JTextField qtyField = new JTextField(5);
     private final JTextField unitField = new JTextField(6);
@@ -47,7 +48,8 @@ public class PantryPanel extends JPanel {
     public PantryPanel(AgentController controller) {
         super(new BorderLayout(8, 8));
         this.controller = controller;
-        setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        setBorder(BorderFactory.createEmptyBorder(16, 20, 12, 16));
+        add(header, BorderLayout.NORTH);
 
         locationBox.setRenderer(new javax.swing.DefaultListCellRenderer() {
             @Override
@@ -69,7 +71,7 @@ public class PantryPanel extends JPanel {
         JPanel bottom = new JPanel(new BorderLayout());
         bottom.add(buildForm(), BorderLayout.CENTER);
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        JButton remove = new JButton("Remove selected");
+        JButton remove = Theme.secondary("Remove selected");
         remove.addActionListener(e -> removeSelected());
         actions.add(remove);
         bottom.add(actions, BorderLayout.SOUTH);
@@ -94,7 +96,7 @@ public class PantryPanel extends JPanel {
             c.gridy = 1;
             form.add(fields[i], c);
         }
-        JButton add = new JButton("Add item");
+        JButton add = Theme.primary("+ Add item");
         add.addActionListener(e -> addItem());
         c.gridx = labels.length;
         c.gridy = 1;
@@ -106,6 +108,8 @@ public class PantryPanel extends JPanel {
     /** Reloads the table from the controller. */
     public void refresh() {
         model.setItems(controller.getPantryItems(), controller.today());
+        int n = model.getRowCount();
+        header.setRight(n + (n == 1 ? " item" : " items"));
     }
 
     private void addItem() {
