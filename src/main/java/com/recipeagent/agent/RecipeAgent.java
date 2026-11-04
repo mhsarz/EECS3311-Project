@@ -57,6 +57,18 @@ public class RecipeAgent {
     static final String SUBSTITUTE_FORMAT = "{\"substitutes\": [{\"substitute\": string, "
             + "\"note\": string, \"pantry_items\": [string]}]}";
 
+    /**
+     * Basics a recipe may use without them being in the pantry. The recipe prompt tells the
+     * LLM so, and the missing-ingredient check (F11) does not count them as missing.
+     */
+    public static final List<String> BASIC_STAPLES = List.of("salt", "pepper", "black pepper",
+            "cooking oil", "oil", "water");
+
+    /** True if the ingredient is one of the {@link #BASIC_STAPLES} (ignoring case). */
+    public static boolean isBasicStaple(String ingredient) {
+        return ingredient != null && BASIC_STAPLES.contains(ingredient.trim().toLowerCase(Locale.ROOT));
+    }
+
     /** Most tool calls the agent may make while answering one chat message (F09). */
     public static final int DEFAULT_MAX_TOOL_CALLS = 5;
     /** How many earlier chat lines are included in the prompt. */
@@ -165,7 +177,8 @@ public class RecipeAgent {
         if (req.isAllowMissing()) {
             task.append("- You may use ingredients that are not in the pantry; keep them few and common.\n");
         } else {
-            task.append("- Use only pantry ingredients, plus salt, pepper, cooking oil and water.\n");
+            task.append("- Use only pantry ingredients, plus these basics: ")
+                    .append(String.join(", ", BASIC_STAPLES)).append(".\n");
         }
         if (!req.getRequiredItems().isEmpty()) {
             task.append("- The recipe must use: ").append(String.join(", ", req.getRequiredItems())).append(".\n");

@@ -154,6 +154,25 @@ class AgentControllerTest {
         }
     }
 
+    @Test
+    void itemsToUseSoonLeaveOutExpiredFoodAndSendNoAlerts() {
+        AgentController c = controller(null);
+        c.addPantryItem(item("spinach", 1, TODAY.minusDays(1)), false);   // expired
+        c.addPantryItem(item("milk", 1, TODAY.plusDays(2)), false);
+        c.addPantryItem(item("cream", 1, TODAY), false);                 // last day
+        c.addPantryItem(item("cheese", 1, TODAY.plusDays(9)), false);
+        List<Notification> received = new ArrayList<>();
+        NotificationListener l = received::add;
+        c.getNotifications().subscribe(l);
+        try {
+            assertEquals(List.of("cream", "milk"),
+                    c.getItemsToUseSoon().stream().map(PantryItem::getName).toList());
+            assertTrue(received.isEmpty());
+        } finally {
+            c.getNotifications().unsubscribe(l);
+        }
+    }
+
     // ------------------------------------------------------------ cooking + undo
 
     @Test
@@ -180,6 +199,16 @@ class AgentControllerTest {
         Recipe r = new Recipe("Omelette", List.of(new Ingredient("eggs", 2, ""), new Ingredient("milk", 1, "cup")),
                 List.of("Cook"), 10, 1);
         assertEquals(List.of("eggs", "milk"), c.checkIngredients(r).getMissingNames());
+    }
+
+    @Test
+    void basicStaplesAreNotCountedAsMissing() {
+        AgentController c = controller(null);
+        c.addPantryItem(item("eggs", 6, null), false);
+        Recipe r = new Recipe("Eggs", List.of(new Ingredient("eggs", 2, ""), new Ingredient("Salt", 0, ""),
+                new Ingredient("black pepper", 0, ""), new Ingredient("cooking oil", 1, "tbsp")),
+                List.of("Fry"), 10, 1);
+        assertTrue(c.checkIngredients(r).allInStock());
     }
 
     // ------------------------------------------------------------ recipe + AI

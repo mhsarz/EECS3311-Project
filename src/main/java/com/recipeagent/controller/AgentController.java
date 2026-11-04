@@ -175,6 +175,22 @@ public class AgentController {
         return expiring;
     }
 
+    /**
+     * Items that expire within {@link #EXPIRY_DAYS} days but have not expired yet, soonest
+     * first: the food to cook first (F05 "Suggest Recipes"). Expired food is left out on
+     * purpose, so the agent is never asked to cook with it. Publishes no alerts.
+     */
+    public List<PantryItem> getItemsToUseSoon() {
+        LocalDate today = LocalDate.now(clock);
+        List<PantryItem> result = new ArrayList<>();
+        for (PantryItem item : pantry.getExpiringItems(EXPIRY_DAYS, today)) {
+            if (item.daysUntilExpiry(today) >= 0) {
+                result.add(item);
+            }
+        }
+        return result;
+    }
+
     public LocalDate today() {
         return LocalDate.now(clock);
     }
@@ -199,11 +215,18 @@ public class AgentController {
     }
 
     /**
-     * Lists the recipe's missing ingredients (F11). Currently compares names exactly;
-     * AI name matching (e.g. "scallions" = "green onions") is added with the flyers work.
+     * Lists the recipe's missing ingredients (F11). Basics such as salt and water are not
+     * counted (see RecipeAgent.BASIC_STAPLES). Currently compares names exactly; AI name
+     * matching (e.g. "scallions" = "green onions") is added with the flyers work.
      */
     public IngredientCheck checkIngredients(Recipe recipe) {
-        return pantry.checkRecipe(recipe);
+        IngredientCheck check = pantry.checkRecipe(recipe);
+        for (String name : check.getMissingNames()) {
+            if (RecipeAgent.isBasicStaple(name)) {
+                check.markFound(name);
+            }
+        }
+        return check;
     }
 
     /**

@@ -110,7 +110,7 @@ class RecipeAgentTest {
         assertTrue(p.contains("\"days_left\":1"));
         assertTrue(p.contains("\"allergies\":[\"peanuts\"]"));
         assertTrue(p.contains("<top_rated_recipes>\nVeggie Curry\n</top_rated_recipes>"));
-        assertTrue(p.contains("Use only pantry ingredients"));
+        assertTrue(p.contains("Use only pantry ingredients, plus these basics: salt, pepper"));
         assertTrue(p.contains("<format>"));
     }
 

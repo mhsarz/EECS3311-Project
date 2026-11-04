@@ -3,6 +3,7 @@ package com.recipeagent.gui;
 import com.recipeagent.controller.AgentController;
 import com.recipeagent.model.Notification;
 import com.recipeagent.model.NotificationType;
+import com.recipeagent.model.PantryItem;
 import com.recipeagent.notify.NotificationListener;
 
 import javax.swing.BorderFactory;
@@ -12,6 +13,7 @@ import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JList;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
@@ -21,15 +23,18 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
+import java.awt.FlowLayout;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 /**
  * The main window of the GUI. It only talks to the {@link AgentController} (Facade) and
  * listens to the {@link com.recipeagent.notify.NotificationCenter} (Singleton) for alerts.
  * <p>
  * On start, and then once a day while it stays open, it runs the expiry check (F05);
- * the alerts appear in the panel at the bottom.
+ * the alerts appear in the panel at the bottom, where "Suggest a recipe" asks the agent
+ * for a recipe that uses the food that expires soon.
  */
 public class MainWindow implements NotificationListener {
 
@@ -40,15 +45,28 @@ public class MainWindow implements NotificationListener {
     private final JFrame frame = new JFrame("AI Smart Recipe & Grocery Agent");
     private final DefaultListModel<Alert> alerts = new DefaultListModel<>();
     private final JLabel status = new JLabel();
+    private final JTabbedPane tabs = new JTabbedPane();
     private final PantryPanel pantryPanel;
+    private final RecipePanel recipePanel;
+    private final HistoryPanel historyPanel;
     private Timer dailyCheck;
 
     public MainWindow(AgentController controller) {
         this.controller = controller;
+        Runnable refresh = this::refreshAll;
         this.pantryPanel = new PantryPanel(controller);
+        this.recipePanel = new RecipePanel(controller, refresh);
+        this.historyPanel = new HistoryPanel(controller, refresh,
+                r -> {
+                    recipePanel.showRecipe(r);
+                    tabs.setSelectedComponent(recipePanel);
+                },
+                () -> tabs.setSelectedComponent(recipePanel));
 
-        JTabbedPane tabs = new JTabbedPane();
         tabs.addTab("Pantry", pantryPanel);
+        tabs.addTab("Recipe", recipePanel);
+        tabs.addTab("History", historyPanel);
+        tabs.addChangeListener(e -> refreshAll());
 
         JPanel content = new JPanel(new BorderLayout());
         content.add(tabs, BorderLayout.CENTER);
@@ -56,8 +74,8 @@ public class MainWindow implements NotificationListener {
 
         frame.setContentPane(content);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setMinimumSize(new Dimension(900, 600));
-        frame.setSize(1050, 700);
+        frame.setMinimumSize(new Dimension(950, 650));
+        frame.setSize(1100, 760);
         frame.setLocationRelativeTo(null);
     }
 
@@ -74,24 +92,49 @@ public class MainWindow implements NotificationListener {
 
         JPanel bottom = new JPanel(new BorderLayout());
         bottom.add(status, BorderLayout.WEST);
+        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        JButton suggest = new JButton("Suggest a recipe using expiring food (AI)");
+        suggest.addActionListener(e -> suggestForExpiring());
+        buttons.add(suggest);
         JButton clear = new JButton("Clear alerts");
         clear.addActionListener(e -> alerts.clear());
-        bottom.add(clear, BorderLayout.EAST);
+        buttons.add(clear);
+        bottom.add(buttons, BorderLayout.EAST);
         panel.add(bottom, BorderLayout.SOUTH);
         return panel;
+    }
+
+    /** F05 "Suggest Recipes": a recipe that must use the items expiring soon (not expired ones). */
+    private void suggestForExpiring() {
+        List<PantryItem> soon = controller.getItemsToUseSoon();
+        if (soon.isEmpty()) {
+            JOptionPane.showMessageDialog(frame, "Nothing in your pantry is about to expire.",
+                    "Suggest a recipe", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        tabs.setSelectedComponent(recipePanel);
+        recipePanel.generate(soon.stream().map(PantryItem::getName).toList());
     }
 
     /** Shows the window, subscribes to alerts and runs the first expiry check. */
     public void show() {
         controller.getNotifications().subscribe(this);
-        updateStatus();
+        refreshAll();
         frame.setVisible(true);
         controller.checkExpiry();
         dailyCheck = new Timer(DAY_MILLIS, e -> {
             controller.checkExpiry();
-            pantryPanel.refresh();
+            refreshAll();
         });
         dailyCheck.start();
+    }
+
+    /** Reloads every tab after something changed (pantry, cart, history, AI usage). */
+    void refreshAll() {
+        pantryPanel.refresh();
+        recipePanel.refresh();
+        historyPanel.refresh();
+        status.setText(controller.getAiStatus());
     }
 
     /** Called by the NotificationCenter; may come from any thread. */
@@ -99,16 +142,13 @@ public class MainWindow implements NotificationListener {
     public void onNotify(Notification n) {
         SwingUtilities.invokeLater(() -> {
             alerts.addElement(new Alert(n, LocalTime.now()));   // in the order sent: most urgent first
-            updateStatus();
+            status.setText(controller.getAiStatus());
         });
-    }
-
-    private void updateStatus() {
-        status.setText(controller.getAiStatus());
     }
 
     /** Shows each alert coloured by type, with the time it arrived. */
     private static class AlertRenderer extends DefaultListCellRenderer {
+        private static final long serialVersionUID = 1L;
         private static final Color EXPIRY = new Color(183, 28, 28);
         private static final Color SALE = new Color(27, 94, 32);
 

@@ -57,9 +57,18 @@ mvn test
 
 ## Run
 
-The GUI opens a window with a Pantry tab and an Alerts panel. Items that expire within
-3 days are shown in yellow, expired items in red, and an alert is listed for each of them
-when the app starts (and once a day while it stays open). Data is saved in `data/`.
+The GUI opens a window with these tabs:
+
+- **Pantry**: add, merge and remove items. Items that expire within 3 days are yellow, expired items red.
+- **Recipe**: generate a recipe with the AI (time limit, portions, optional "allow ingredients I don't
+  have"), substitute a missing ingredient, check what is missing and add it to the cart, mark as
+  cooked (takes the amounts out of the pantry), undo, and save to history.
+- **History**: saved recipes with 1-5 star ratings, favourites and search. Top-rated recipes are used
+  as favourites when a new recipe is generated.
+
+The Alerts panel lists expiry alerts when the app starts (and once a day while it stays open);
+"Suggest a recipe using expiring food" asks the AI for a recipe that uses them. AI features need
+`LLM_API_KEY` in `.env`; everything else works without it. Data is saved in `data/`.
 
 GUI:
 
@@ -100,7 +109,8 @@ src/main/java/com/recipeagent/
                        error handling, usage counting)
   prompt/              Prompt, PromptBuilder, ClaudePromptBuilder, PlainPromptBuilder (Builder)
   controller/AgentController  the Facade used by the GUI and CLI; saves every change
-  gui/                 MainWindow (tabs + alerts panel), PantryPanel, PantryTableModel, InputParser
+  gui/                 MainWindow (tabs + alerts panel), PantryPanel, RecipePanel, HistoryPanel,
+                       table models, InputParser, Background (runs AI calls off the UI thread)
 src/test/java/...      JUnit 5 tests
 UMLs/                  class, use-case and sequence diagrams (UMLet .uxf + .svg)
 ```

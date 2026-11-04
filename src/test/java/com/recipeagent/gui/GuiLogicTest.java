@@ -65,6 +65,63 @@ class GuiLogicTest {
         assertEquals("rice", model.getItemAt(1).getName());
     }
 
+    @Test
+    void ingredientAmountsReadNaturally() {
+        assertEquals("1 cup", IngredientTableModel.amount(new com.recipeagent.model.Ingredient("rice", 1, "cup")));
+        assertEquals("2", IngredientTableModel.amount(new com.recipeagent.model.Ingredient("eggs", 2, "")));
+        assertEquals("to taste", IngredientTableModel.amount(new com.recipeagent.model.Ingredient("salt", 0, "")));
+        IngredientTableModel m = new IngredientTableModel();
+        m.setIngredients(List.of(new com.recipeagent.model.Ingredient("rice", 1.5, "cup")));
+        assertEquals("rice", m.getValueAt(0, 0));
+        assertEquals("1.5 cup", m.getValueAt(0, 1));
+        m.setIngredients(null);
+        assertEquals(0, m.getRowCount());
+    }
+
+    @Test
+    void historyTableShowsRatingFavouriteAndCooks() {
+        com.recipeagent.model.Recipe r = new com.recipeagent.model.Recipe("Curry",
+                List.of(new com.recipeagent.model.Ingredient("rice", 1, "")), List.of("Cook"), 30, 2);
+        r.setRating(4);
+        r.setFavourite(true);
+        r.recordCooked(LocalDate.of(2026, 11, 1));
+        com.recipeagent.model.Recipe plain = new com.recipeagent.model.Recipe("Toast",
+                List.of(new com.recipeagent.model.Ingredient("bread", 1, "")), List.of("Toast"), 5, 1);
+
+        HistoryTableModel m = new HistoryTableModel();
+        m.setRecipes(List.of(r, plain));
+        assertEquals("★★★★☆", m.getValueAt(0, 1));
+        assertEquals("♥", m.getValueAt(0, 2));
+        assertEquals(1, m.getValueAt(0, 3));
+        assertEquals("2026-11-01", m.getValueAt(0, 4));
+        assertEquals(30, m.getValueAt(0, 5));
+        assertEquals("not rated", m.getValueAt(1, 1));
+        assertEquals("", m.getValueAt(1, 2));
+        assertEquals("never", m.getValueAt(1, 4));
+
+        m.setFancySymbols(false);                    // for fonts without star/heart symbols
+        assertEquals("4/5", m.getValueAt(0, 1));
+        assertEquals("yes", m.getValueAt(0, 2));
+    }
+
+    @Test
+    void recipeTextForTheScreenAndDialogs() {
+        assertEquals("1. Chop\n\n2. Boil", RecipePanel.formatSteps(List.of("Chop", "Boil")));
+        assertEquals("", RecipePanel.formatSteps(List.of()));
+
+        String subs = RecipePanel.formatSubstitutes("buttermilk", List.of(
+                new com.recipeagent.model.Substitution("milk with lemon juice", "1 cup milk + 1 tbsp lemon", true),
+                new com.recipeagent.model.Substitution("plain yogurt", "", false)));
+        assertEquals("Instead of buttermilk you can use:\n"
+                + "\n1. milk with lemon juice  (in your pantry)\n    1 cup milk + 1 tbsp lemon"
+                + "\n2. plain yogurt", subs);
+
+        String missing = RecipePanel.formatMissing(List.of(
+                new com.recipeagent.model.Ingredient("soy sauce", 2, "tbsp"),
+                new com.recipeagent.model.Ingredient("pepper", 0, "")));
+        assertEquals("You are missing:\n\n•  soy sauce — 2 tbsp\n•  pepper — to taste", missing);
+    }
+
     private static String message(Runnable r) {
         return assertThrows(IllegalArgumentException.class, r::run).getMessage();
     }
