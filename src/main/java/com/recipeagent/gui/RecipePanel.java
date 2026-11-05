@@ -118,6 +118,7 @@ public class RecipePanel extends JPanel {
     private transient Recipe recipe;
     private transient List<String> lastRequired = List.of();
     private boolean aiBusy;
+    private int shownDefaultPortions;
 
     /**
      * @param dataChanged called after anything that changes the pantry, cart or history,
@@ -144,7 +145,8 @@ public class RecipePanel extends JPanel {
         stateArea.add(buildRecipeCard(), RECIPE);
         add(stateArea, BorderLayout.CENTER);
 
-        portionsField.setText(String.valueOf(controller.getProfile().getDefaultPortions()));
+        shownDefaultPortions = controller.getProfile().getDefaultPortions();
+        portionsField.setText(String.valueOf(shownDefaultPortions));
         showRecipe(null);
     }
 
@@ -319,8 +321,18 @@ public class RecipePanel extends JPanel {
         refresh();
     }
 
-    /** Re-reads the pantry (statuses change when food is added or used) and updates the buttons. */
+    /**
+     * Re-reads the pantry (statuses change when food is added or used) and updates the buttons.
+     * A new default portion count from the Profile tab is shown unless the user typed their own.
+     */
     public void refresh() {
+        int defaultPortions = controller.getProfile().getDefaultPortions();
+        if (defaultPortions != shownDefaultPortions) {
+            if (portionsField.getText().trim().equals(String.valueOf(shownDefaultPortions))) {
+                portionsField.setText(String.valueOf(defaultPortions));
+            }
+            shownDefaultPortions = defaultPortions;
+        }
         if (recipe != null) {
             List<IngredientStatus> statuses = controller.getIngredientStatuses(recipe);
             metaLabel.setText(meta(recipe));
@@ -696,6 +708,10 @@ public class RecipePanel extends JPanel {
 
     Recipe getRecipe() {
         return recipe;
+    }
+
+    String getPortionsText() {
+        return portionsField.getText();
     }
 
     // ------------------------------------------------------------ text helpers (tested)

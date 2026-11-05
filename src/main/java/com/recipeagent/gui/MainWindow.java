@@ -31,6 +31,7 @@ public class MainWindow implements NotificationListener {
     static final String RECIPE = "Recipe";
     static final String CART = "Cart";
     static final String HISTORY = "History";
+    static final String PROFILE = "Profile";
 
     private final AgentController controller;
     private final JFrame frame = new JFrame("Smart Pantry – AI Recipe & Grocery Agent");
@@ -44,6 +45,7 @@ public class MainWindow implements NotificationListener {
     private final RecipePanel recipePanel;
     private final CartPanel cartPanel;
     private final HistoryPanel historyPanel;
+    private final ProfilePanel profilePanel;
     private final ChatPanel chatPanel;
     private Timer dailyCheck;
 
@@ -61,12 +63,14 @@ public class MainWindow implements NotificationListener {
                 },
                 () -> tabBar.select(RECIPE));
         this.chatPanel = new ChatPanel(controller, refresh);
+        this.profilePanel = new ProfilePanel(controller, refresh, chatPanel::send, chatPanel::isBusy);
         this.alerts = new AlertsStrip(this::suggestForExpiring);
 
         addPage(PANTRY, pantryPanel);
         addPage(RECIPE, recipePanel);
         addPage(CART, cartPanel);
         addPage(HISTORY, historyPanel);
+        addPage(PROFILE, profilePanel);
         tabBar.onSelect(name -> {
             pages.show(pageArea, name);
             refreshAll();
@@ -133,6 +137,7 @@ public class MainWindow implements NotificationListener {
         recipePanel.refresh();
         cartPanel.refresh();
         historyPanel.refresh();
+        profilePanel.refresh();
         footer.setAiStatus(controller.getAiStatus(), controller.isAiAvailable());
     }
 

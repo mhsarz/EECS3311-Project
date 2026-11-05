@@ -190,6 +190,11 @@ public class ChatPanel extends JPanel {
         return lines * lineHeight + in.top + in.bottom + 2;
     }
 
+    /** True while the agent is answering (the Send button is off). */
+    public boolean isBusy() {
+        return !send.isEnabled();
+    }
+
     JTextArea getInput() {
         return input;
     }

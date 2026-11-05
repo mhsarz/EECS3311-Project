@@ -80,6 +80,10 @@ dependency) and falls back to the system look if FlatLaf is missing. Tabs:
   make a favourite (or press 1-5 and F on the selected row); search by name or ingredient, show
   favourites only, open a recipe or remove it. The footer shows totals. Top-rated recipes are used
   as favourites when a new recipe is generated.
+- **Profile**: your diet, allergies, dislikes and default portions, used by every recipe. Fill in the
+  form (type an allergy or dislike and press Enter; click × to remove it) and click **Save profile**,
+  or click **Help Me Set Up** to answer about 6 questions from the agent in the Chat panel; it saves the
+  profile at the end. Without the AI, the page asks you to use the form instead.
 
 The Alerts panel lists expiry alerts when the app starts (and once a day while it stays open);
 "Suggest a recipe using expiring food" asks the AI for a recipe that uses them. AI features need
@@ -125,8 +129,8 @@ src/main/java/com/recipeagent/
   prompt/              Prompt, PromptBuilder, ClaudePromptBuilder, PlainPromptBuilder (Builder)
   controller/AgentController  the Facade used by the GUI and CLI; saves every change
   gui/                 MainWindow, HeaderBar, TabBar, PageHeader, ChatPanel, AlertsStrip, StatusFooter,
-                       Theme (colours, buttons), Chip, DatePicker, PantryPanel, RecipePanel, CartPanel,
-                       HistoryPanel, table models,
+                       Theme (colours, buttons), Chip, DatePicker, TagInput, PantryPanel, RecipePanel,
+                       CartPanel, HistoryPanel, ProfilePanel, table models,
                        InputParser, Background (runs AI calls off the UI thread)
 src/test/java/...      JUnit 5 tests
 UMLs/                  class, use-case and sequence diagrams (UMLet .uxf + .svg)
