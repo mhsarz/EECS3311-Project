@@ -11,6 +11,9 @@ public class CartItem {
     private String unit;
     private CartSource source;
     private boolean onSale;
+    private String saleStore;
+    private String saleItem;
+    private Double salePrice;
 
     /** An item typed in by the user, with no unit. */
     public CartItem(String name, double quantity) {
@@ -75,8 +78,44 @@ public class CartItem {
         return onSale;
     }
 
+    /** Sets or clears the on-sale flag; clearing it also forgets which sale it was. */
     public void setOnSale(boolean onSale) {
         this.onSale = onSale;
+        if (!onSale) {
+            saleStore = null;
+            saleItem = null;
+            salePrice = null;
+        }
+    }
+
+    /** Marks this item as on sale at {@code store} as {@code flyerItem} (F02 sale check). */
+    public void setSale(String store, FlyerItem flyerItem) {
+        if (flyerItem == null) {
+            throw new IllegalArgumentException("Flyer item must not be null");
+        }
+        this.saleStore = Validation.requireText(store, "Store");
+        this.saleItem = flyerItem.getName();
+        this.salePrice = flyerItem.getSalePrice();
+        this.onSale = true;
+    }
+
+    public void clearSale() {
+        setOnSale(false);
+    }
+
+    /** The store with the sale, or null if not on sale (or found before stores were kept). */
+    public String getSaleStore() {
+        return onSale ? saleStore : null;
+    }
+
+    /** The flyer item it matched, e.g. "2% Milk 4L", or null. */
+    public String getSaleItemName() {
+        return onSale ? saleItem : null;
+    }
+
+    /** The sale price, or null. */
+    public Double getSalePrice() {
+        return onSale ? salePrice : null;
     }
 
     @Override

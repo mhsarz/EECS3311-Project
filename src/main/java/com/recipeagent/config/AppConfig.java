@@ -20,6 +20,8 @@ public final class AppConfig {
     public static final String KEY_MODEL = "LLM_MODEL";
     public static final String KEY_DAILY_LIMIT = "LLM_DAILY_LIMIT";
     public static final String KEY_DATA_DIR = "DATA_DIR";
+    /** Optional web address of a store's flyer, with {store} for the store name (F10). */
+    public static final String KEY_FLYER_URL = "FLYER_URL_TEMPLATE";
 
     public static final String DEFAULT_MODEL = "claude-opus-5-5";
     public static final int DEFAULT_DAILY_LIMIT = 100;
@@ -52,7 +54,7 @@ public final class AppConfig {
                 System.err.println("Warning: could not read " + envFile + ": " + e.getMessage());
             }
         }
-        for (String key : List.of(KEY_API_KEY, KEY_MODEL, KEY_DAILY_LIMIT, KEY_DATA_DIR)) {
+        for (String key : List.of(KEY_API_KEY, KEY_MODEL, KEY_DAILY_LIMIT, KEY_DATA_DIR, KEY_FLYER_URL)) {
             String v = env.get(key);
             if (v != null && !v.isBlank()) {
                 merged.put(key, v.trim());
@@ -129,12 +131,19 @@ public final class AppConfig {
         return Path.of((d == null || d.isBlank()) ? DEFAULT_DATA_DIR : d);
     }
 
+    /** The online flyer address with {store}, or empty if online flyers are not set up. */
+    public Optional<String> getFlyerUrlTemplate() {
+        String v = values.get(KEY_FLYER_URL);
+        return v == null || v.isBlank() || !v.contains("{store}") ? Optional.empty() : Optional.of(v.trim());
+    }
+
     /** Safe summary for logs: shows whether a key is set, never the key itself. */
     @Override
     public String toString() {
         return "AppConfig{apiKey=" + (hasApiKey() ? "set" : "missing")
                 + ", model=" + getModel()
                 + ", dailyLimit=" + getDailyLimit()
-                + ", dataDir=" + getDataDir() + "}";
+                + ", dataDir=" + getDataDir()
+                + ", onlineFlyers=" + (getFlyerUrlTemplate().isPresent() ? "set" : "not set") + "}";
     }
 }

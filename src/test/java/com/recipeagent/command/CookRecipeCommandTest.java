@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -122,5 +123,19 @@ class CookRecipeCommandTest {
                 () -> new CookRecipeCommand(friedRice(), null, new RecipeHistory(), TODAY));
         assertEquals("Cooked Egg Fried Rice",
                 new CookRecipeCommand(friedRice(), pantry(), new RecipeHistory()).getDescription());
+    }
+
+    @Test
+    void usesThePantryItemAnIngredientWasMatchedTo() {
+        PantryManager pm = new PantryManager();
+        pm.addItem(new PantryItem("green onions", 3, "", StorageLocation.FRIDGE, null));
+        Recipe r = new Recipe("Soup", List.of(new Ingredient("Scallions", 2, "")), List.of("Cook"), 10, 1);
+        CookRecipeCommand cmd = new CookRecipeCommand(r, pm, new RecipeHistory(), LocalDate.of(2026, 11, 5),
+                Map.of("scallions", "green onions"));
+        cmd.execute();
+        assertEquals(1, pm.findByName("green onions").get(0).getQuantity());
+        assertTrue(cmd.getSkipped().isEmpty());
+        cmd.undo();
+        assertEquals(3, pm.findByName("green onions").get(0).getQuantity());
     }
 }

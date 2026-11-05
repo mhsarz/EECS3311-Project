@@ -53,6 +53,23 @@ public class IngredientCheck {
         return missing.removeIf(i -> i.getName().equalsIgnoreCase(n));
     }
 
+    /**
+     * Replaces a missing ingredient with what is still needed, e.g. when the pantry has some
+     * of it under another name (F11 name matching).
+     */
+    public void replaceMissing(String ingredientName, Ingredient stillNeeded) {
+        if (stillNeeded == null) {
+            throw new IllegalArgumentException("Ingredient must not be null");
+        }
+        for (int i = 0; i < missing.size(); i++) {
+            if (missing.get(i).getName().equalsIgnoreCase(ingredientName == null ? "" : ingredientName.trim())) {
+                missing.set(i, stillNeeded);
+                return;
+            }
+        }
+        missing.add(stillNeeded);
+    }
+
     @Override
     public String toString() {
         return allInStock() ? "All ingredients in stock" : "Missing: " + getMissingNames();

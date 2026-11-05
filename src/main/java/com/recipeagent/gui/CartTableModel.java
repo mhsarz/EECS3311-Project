@@ -38,6 +38,17 @@ public class CartTableModel extends AbstractTableModel {
         return sale > 0 ? text + " · " + sale + " on sale" : text;
     }
 
+    /** "No Frills · $5.49", "On sale" (store unknown) or "" when not on sale. */
+    static String saleLabel(CartItem i) {
+        if (!i.isOnSale()) {
+            return "";
+        }
+        if (i.getSaleStore() == null || i.getSalePrice() == null) {
+            return "On sale";
+        }
+        return i.getSaleStore() + " · " + String.format(java.util.Locale.CANADA, "$%.2f", i.getSalePrice());
+    }
+
     /** "3 L", "12", "1.5 kg". */
     static String amount(CartItem i) {
         return (InputParser.formatQuantity(i.getQuantity()) + " " + i.getUnit()).trim();
@@ -66,7 +77,7 @@ public class CartTableModel extends AbstractTableModel {
             case SOURCE_COLUMN:
                 return CartSource.class;
             case SALE_COLUMN:
-                return Boolean.class;
+                return String.class;
             default:
                 return String.class;
         }
@@ -85,7 +96,7 @@ public class CartTableModel extends AbstractTableModel {
             case SOURCE_COLUMN:
                 return i.getSource();
             case SALE_COLUMN:
-                return i.isOnSale();
+                return saleLabel(i);
             default:
                 return "";
         }

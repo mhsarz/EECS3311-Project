@@ -39,7 +39,8 @@ The design (features F01–F11, UML diagrams, and design patterns) is in `AI Sma
 | `LLM_API_KEY` | (none) | Anthropic API key. Without it, only the deterministic features work. |
 | `LLM_MODEL` | `claude-opus-5-5` | Model name sent to the API. |
 | `LLM_DAILY_LIMIT` | `100` | Maximum LLM calls per day (enforced by `LLMClientProxy`). |
-| `DATA_DIR` | `data` | Folder where pantry, cart, history and profile are saved. |
+| `DATA_DIR` | `data` | Folder where pantry, cart, history, profile and flyers are saved. |
+| `FLYER_URL_TEMPLATE` | (none) | Optional web address of a store's flyer with `{store}` for the store name. Without it, upload flyer files in the Flyers tab. |
 
 ## Build and test
 
@@ -69,17 +70,26 @@ dependency) and falls back to the system look if FlatLaf is missing. Tabs:
 - **Recipe**: generate a recipe with the AI (time limit, portions, optional "allow ingredients I don't
   have"); Cancel while it is thinking. The recipe card shows "Uses N expiring items", "3 in pantry ·
   2 missing" and a chip for each ingredient (In pantry, Use soon, Expired, Not enough, Missing, Basic).
+  When an ingredient has a different name in your pantry, Cook This asks the AI once, so "scallions"
+  can count as your "green onions" (shown next to the ingredient).
   **Substitute** asks the AI for replacements and "Use substitute" puts one into the recipe. **Cook This**
   lists what is missing and can add it to the cart; **Mark as Cooked** takes the amounts out of the
   pantry (with **Undo**); **Save to History**. If the AI is unavailable the page says why and offers
   Try Again or Open History.
 - **Cart**: your shopping list. Add an item with a quantity and an optional unit, edit it (or
   double-click), remove it, or clear the cart. Each item shows where it came from: You, Recipe (from
-  Cook This) or Chat (added by the agent). Items on sale this week are marked once flyers are loaded.
+  Cook This) or Chat (added by the agent). New items are checked against this week's flyers by the
+  AI; items on sale show the store and price ("No Frills · $5.49") and a sale alert appears.
+  **Check for sales** checks the whole cart again.
 - **History**: saved recipes, most recently cooked first. Click a star to rate (1-5) and the heart to
   make a favourite (or press 1-5 and F on the selected row); search by name or ingredient, show
   favourites only, open a recipe or remove it. The footer shows totals. Top-rated recipes are used
   as favourites when a new recipe is generated.
+- **Flyers**: tick the stores you shop at, then **Refresh flyers** (needs `FLYER_URL_TEMPLATE`) or
+  **Upload flyer…** and choose a text file with a store's flyer (copy the flyer page from the store's
+  website into a `.txt` file; saved `.html` pages work too). The AI reads the sale items and prices,
+  and the cart is checked for sales. Search and filter by store; "In your cart" shows the matches.
+  The chat can answer "What's on sale at No Frills?".
 - **Profile**: your diet, allergies, dislikes and default portions, used by every recipe. Fill in the
   form (type an allergy or dislike and press Enter; click × to remove it) and click **Save profile**,
   or click **Help Me Set Up** to answer about 6 questions from the agent in the Chat panel; it saves the
@@ -114,15 +124,18 @@ src/main/java/com/recipeagent/
   model/               domain classes (PantryItem, Recipe, CartItem, Flyer, Notification, ...)
   storage/JsonStorage  saves and loads data as JSON files in DATA_DIR
   pantry/PantryManager pantry stock, expiry, deduct/restore, recipe check
-  cart/ShoppingCart    shopping list with merge and sale flags
+  cart/ShoppingCart    shopping list with merge and sale details
+  flyer/               FlyerService (stores, sources, flyers), FlyerSource (Strategy) with
+                       FileFlyerSource and OnlineFlyerSource
   history/RecipeHistory saved recipes, ratings, favourites, search, cook records
   command/             Command, CookRecipeCommand, CommandHistory (mark as cooked + undo)
   notify/              NotificationCenter (Singleton) and NotificationListener
   agent/AgentTool      interface for tools the agent can call
   agent/RecipeAgent    the AI agent: recipe generation (F01) and substitutes (F07),
                        checks every LLM reply and retries once with feedback;
-                       chat with a tool-use loop (F09) and profile questionnaire (F04)
-  agent/tools/         PantryTool, ProfileTool, CartTool (what the agent can use)
+                       chat with a tool-use loop (F09) and profile questionnaire (F04);
+                       flyer reading (F10), sale matching (F02) and ingredient name matching (F11)
+  agent/tools/         PantryTool, ProfileTool, CartTool, FlyerTool (what the agent can use)
   llm/                 LLMClient (interface), ClaudeClient (Adapter), AnthropicApi (HTTP client
                        for the Anthropic Messages API), LLMClientProxy (Proxy: daily limit,
                        error handling, usage counting)
@@ -130,7 +143,7 @@ src/main/java/com/recipeagent/
   controller/AgentController  the Facade used by the GUI and CLI; saves every change
   gui/                 MainWindow, HeaderBar, TabBar, PageHeader, ChatPanel, AlertsStrip, StatusFooter,
                        Theme (colours, buttons), Chip, DatePicker, TagInput, PantryPanel, RecipePanel,
-                       CartPanel, HistoryPanel, ProfilePanel, table models,
+                       CartPanel, HistoryPanel, FlyersPanel, ProfilePanel, table models,
                        InputParser, Background (runs AI calls off the UI thread)
 src/test/java/...      JUnit 5 tests
 UMLs/                  class, use-case and sequence diagrams (UMLet .uxf + .svg)

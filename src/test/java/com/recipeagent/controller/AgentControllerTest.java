@@ -7,6 +7,7 @@ import com.recipeagent.llm.LLMResponse;
 import com.recipeagent.llm.LLMUnavailableException;
 import com.recipeagent.model.CartItem;
 import com.recipeagent.model.Ingredient;
+import com.recipeagent.model.IngredientCheck;
 import com.recipeagent.model.IngredientStatus;
 import com.recipeagent.model.Notification;
 import com.recipeagent.model.NotificationType;
@@ -29,6 +30,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -389,5 +391,182 @@ class AgentControllerTest {
         assertTrue(c.removeRecipe(r.getId()));
         assertFalse(c.removeRecipe(r.getId()));
         assertTrue(controller(null).getHistory().isEmpty());
+    }
+
+    // ------------------------------------------------------------ F10 flyers + F02 sales + F11 names
+
+    private static final String MILK_FLYER = "{\"end_date\":\"2026-11-10\",\"items\":["
+            + "{\"name\":\"2% Milk 4L\",\"price\":5.49},{\"name\":\"Large Eggs 12\",\"price\":3.99}]}";
+
+    private AgentController controller(LLMClient llm, int limit) {
+        return new AgentController(llm, limit, new JsonStorage(tmp), CLOCK);
+    }
+
+    private Path flyerFile() throws java.io.IOException {
+        Path f = tmp.resolve("nofrills.txt");
+        java.nio.file.Files.writeString(f, "No Frills flyer: 2% Milk 4L $5.49, Large Eggs 12 $3.99");
+        return f;
+    }
+
+    @Test
+    void uploadFlyerReadsTheFileSavesItAndChecksTheCart() throws Exception {
+        ScriptedLLM llm = new ScriptedLLM();
+        llm.replies.add(LLMResponse.text(MILK_FLYER));
+        llm.replies.add(LLMResponse.text("{\"matches\":[{\"cart_item\":\"milk\",\"flyer_item_id\":1}]}"));
+        AgentController c = controller(llm);
+        c.addToCart(new CartItem("milk", 1));
+        List<Notification> got = new ArrayList<>();
+        NotificationListener listener = got::add;
+        c.getNotifications().subscribe(listener);
+        try {
+            FlyerRefresh r = c.uploadFlyer(flyerFile(), "no frills");
+            assertEquals(1, r.getUpdated().size());
+            assertEquals(1, r.getSales().getMatches().size());
+            assertTrue(llm.prompts.get(0).contains("Large Eggs 12 $3.99"));      // the file text was sent
+
+            CartItem milk = c.getCartItems().get(0);
+            assertEquals("No Frills", milk.getSaleStore());
+            assertEquals(5.49, milk.getSalePrice().doubleValue());
+            assertEquals("2% Milk 4L", milk.getSaleItemName());
+            assertEquals(1, got.size());
+            assertEquals(NotificationType.SALE, got.get(0).getType());
+            assertTrue(c.isStoreSelected("No Frills"));
+
+            AgentController reopened = controller(null);                          // saved to disk
+            assertEquals(2, reopened.getFlyers().get(0).getItems().size());
+            assertEquals("No Frills", reopened.getCartItems().get(0).getSaleStore());
+
+            llm.replies.add(LLMResponse.text("{\"matches\":[{\"cart_item\":\"milk\",\"flyer_item_id\":1}]}"));
+            c.checkSales(List.of("milk"));
+            assertEquals(1, got.size());                                          // same sale: no second alert
+        } finally {
+            c.getNotifications().unsubscribe(listener);
+        }
+    }
+
+    @Test
+    void salesAreNotCheckedWithoutFlyersOrWithoutAi() throws Exception {
+        ScriptedLLM llm = new ScriptedLLM();
+        AgentController c = controller(llm, 2);
+        c.addToCart(new CartItem("milk", 1));
+        SaleCheck none = c.checkSales(List.of("milk", "not in cart"));
+        assertFalse(none.wasRun());
+        assertEquals(List.of("milk"), none.getChecked());
+        assertTrue(none.getSkippedReason().startsWith("No flyers for this week"));
+        assertTrue(llm.prompts.isEmpty());                                        // no AI call for nothing
+
+        llm.replies.add(LLMResponse.text(MILK_FLYER));
+        llm.replies.add(LLMResponse.text("{\"matches\":[]}"));
+        c.uploadFlyer(flyerFile(), "No Frills");                                 // uses the 2 calls of the day
+        SaleCheck noAi = c.checkSales(List.of("milk"));
+        assertTrue(noAi.getSkippedReason().contains("AI is unavailable"));
+        assertTrue(c.checkSales(List.of()).wasRun());                             // nothing to check is fine
+    }
+
+    @Test
+    void refreshReportsStoresThatNeedAnUploadAndKeepsOldFlyersWithoutAi() throws Exception {
+        ScriptedLLM llm = new ScriptedLLM();
+        AgentController c = controller(llm);
+        assertThrows(IllegalStateException.class, c::refreshFlyers);             // no store picked
+        c.setStoreSelected("Metro", true);
+        FlyerRefresh r = c.refreshFlyers();                                       // online flyers not set up
+        assertTrue(r.getUpdated().isEmpty());
+        assertTrue(r.isUploadSuggested());
+        assertTrue(r.getProblems().get("Metro").contains("upload the Metro flyer"));
+        assertTrue(llm.prompts.isEmpty());
+        assertFalse(c.isOnlineFlyersSetUp());
+
+        AgentController noAi = controller(null);
+        assertThrows(LLMUnavailableException.class, noAi::refreshFlyers);
+
+        llm.replies.add(LLMResponse.text(MILK_FLYER));
+        c.uploadFlyer(flyerFile(), "No Frills");
+        llm.replies.add(LLMResponse.text(MILK_FLYER));
+        FlyerRefresh again = c.refreshFlyers();                                   // No Frills re-reads its file
+        assertEquals(List.of("No Frills"), again.getUpdated().stream().map(f -> f.getStore()).toList());
+        assertTrue(again.getProblems().containsKey("Metro"));
+    }
+
+    @Test
+    void itemsTheChatAddsAreCheckedForSales() throws Exception {
+        ScriptedLLM llm = new ScriptedLLM();
+        AgentController c = controller(llm);
+        llm.replies.add(LLMResponse.text(MILK_FLYER));
+        c.uploadFlyer(flyerFile(), "No Frills");                                 // cart empty: no sale check call
+        assertEquals(1, llm.prompts.size());
+
+        llm.replies.add(LLMResponse.toolCall("cart", "{\"action\":\"add\",\"name\":\"eggs\",\"quantity\":12}"));
+        llm.replies.add(LLMResponse.text("Added a dozen eggs."));
+        llm.replies.add(LLMResponse.text("{\"matches\":[{\"cart_item\":\"eggs\",\"flyer_item_id\":2}]}"));
+        c.chat("add a dozen eggs");
+        CartItem eggs = c.getCartItems().get(0);
+        assertTrue(eggs.isOnSale());
+        assertEquals(3.99, eggs.getSalePrice().doubleValue());
+        assertEquals(com.recipeagent.model.CartSource.CHAT, eggs.getSource());
+        assertTrue(llm.prompts.get(3).contains("<shopping_list>\neggs"));
+    }
+
+    @Test
+    void saleMarksFromAnEndedFlyerAreClearedWhenTheAppStarts() throws Exception {
+        ScriptedLLM llm = new ScriptedLLM();
+        llm.replies.add(LLMResponse.text(MILK_FLYER));                           // ends Nov 10
+        llm.replies.add(LLMResponse.text("{\"matches\":[{\"cart_item\":\"milk\",\"flyer_item_id\":1}]}"));
+        AgentController c = controller(llm);
+        c.addToCart(new CartItem("milk", 1));
+        c.uploadFlyer(flyerFile(), "No Frills");
+        assertTrue(c.getCartItems().get(0).isOnSale());
+
+        Clock later = Clock.fixed(Instant.parse("2026-11-12T12:00:00Z"), ZoneOffset.UTC);
+        AgentController nextWeek = new AgentController(null, 100, new JsonStorage(tmp), later);
+        assertFalse(nextWeek.getCartItems().get(0).isOnSale());
+        assertTrue(nextWeek.getCurrentFlyers().isEmpty());
+        assertEquals(1, nextWeek.getFlyers().size());                            // kept, but not current
+    }
+
+    @Test
+    void ingredientsAreMatchedToPantryItemsWithAnotherName() {
+        ScriptedLLM llm = new ScriptedLLM();
+        llm.replies.add(LLMResponse.text("{\"matches\":[{\"ingredient\":\"scallions\",\"pantry_item\":\"green onions\"}]}"));
+        AgentController c = controller(llm);
+        c.addPantryItem(item("green onions", 2, null), false);
+        c.addPantryItem(item("rice", 5, null), false);
+        Recipe r = new Recipe("Fried rice", List.of(new Ingredient("rice", 1, "cup"), new Ingredient("scallions", 1, ""),
+                new Ingredient("saffron", 1, "pinch"), new Ingredient("salt", 0, "")), List.of("Cook"), 20, 2);
+
+        assertEquals(IngredientStatus.MISSING, c.getIngredientStatuses(r).get(1));   // not asked yet: no AI call
+        assertTrue(llm.prompts.isEmpty());
+        assertEquals(List.of("saffron"), c.checkIngredients(r).getMissingNames());
+        assertEquals(1, llm.prompts.size());
+        assertTrue(llm.prompts.get(0).contains("scallions\nsaffron"));              // rice and salt are not asked
+        assertEquals(IngredientStatus.IN_PANTRY, c.getIngredientStatuses(r).get(1));
+        assertEquals(Optional.of("green onions"), c.getPantryMatch("Scallions"));
+        assertEquals(Optional.empty(), c.getPantryMatch("rice"));
+
+        c.checkIngredients(r);
+        assertEquals(1, llm.prompts.size());                                     // answers are remembered
+
+        c.markCooked(r);
+        double left = c.getPantryItems().stream().filter(p -> p.hasName("green onions")).findFirst().orElseThrow().getQuantity();
+        assertEquals(1, left);                                                    // the matched item was used
+        c.undo();
+        assertEquals(2, c.getPantryItems().stream().filter(p -> p.hasName("green onions")).findFirst().orElseThrow().getQuantity());
+
+        Recipe more = new Recipe("Big bowl", List.of(new Ingredient("scallions", 3, "")), List.of("Cook"), 20, 2);
+        IngredientCheck check = c.checkIngredients(more);
+        assertEquals(1, check.getMissing().get(0).getQuantity());                // needs 3, has 2
+        assertEquals(IngredientStatus.NOT_ENOUGH, c.getIngredientStatuses(more).get(0));
+
+        c.addPantryItem(item("saffron threads", 1, null), false);                // a new item: ask about saffron again
+        llm.replies.add(LLMResponse.text("{\"matches\":[{\"ingredient\":\"saffron\",\"pantry_item\":\"saffron threads\"}]}"));
+        assertTrue(c.checkIngredients(r).allInStock());
+        assertEquals(2, llm.prompts.size());
+    }
+
+    @Test
+    void withoutAiOnlyExactNamesAreUsed() {
+        AgentController c = controller(null);
+        c.addPantryItem(item("green onions", 2, null), false);
+        Recipe r = new Recipe("Soup", List.of(new Ingredient("scallions", 1, "")), List.of("Cook"), 20, 2);
+        assertEquals(List.of("scallions"), c.checkIngredients(r).getMissingNames());   // UC11 2a
     }
 }

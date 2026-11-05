@@ -86,4 +86,32 @@ class CartAndFlyerTest {
         assertEquals("", old.getUnit());
         assertEquals(CartSource.MANUAL, old.getSource());
     }
+
+    @Test
+    void cartItemRemembersItsSale() {
+        CartItem milk = new CartItem("milk", 1);
+        milk.setSale("No Frills", new FlyerItem("2% Milk 4L", 5.49));
+        assertTrue(milk.isOnSale());
+        assertEquals("No Frills", milk.getSaleStore());
+        assertEquals("2% Milk 4L", milk.getSaleItemName());
+        assertEquals(5.49, milk.getSalePrice().doubleValue());
+        milk.clearSale();
+        assertFalse(milk.isOnSale());
+        assertNull(milk.getSaleStore());
+        assertNull(milk.getSalePrice());
+        milk.setOnSale(true);                                   // old style flag: no details
+        assertNull(milk.getSaleItemName());
+        assertThrows(IllegalArgumentException.class, () -> milk.setSale(" ", new FlyerItem("x", 1)));
+        assertThrows(IllegalArgumentException.class, () -> milk.setSale("Metro", null));
+        SaleMatch m = new SaleMatch("milk", new FlyerItem("2% Milk 4L", 5.49), "Metro");
+        assertEquals("milk -> 2% Milk 4L - $5.49 at Metro", m.toString());
+    }
+
+    @Test
+    void ingredientCheckCanReplaceAMissingAmount() {
+        IngredientCheck check = new IngredientCheck("r1", List.of(new Ingredient("scallions", 3, "")));
+        check.replaceMissing("Scallions", new Ingredient("scallions", 1, ""));
+        assertEquals(1, check.getMissing().get(0).getQuantity());
+        assertEquals(1, check.getMissing().size());
+    }
 }

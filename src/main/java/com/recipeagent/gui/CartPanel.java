@@ -70,6 +70,7 @@ public class CartPanel extends JPanel {
     private final JButton editButton = Theme.secondary("Edit");
     private final JButton removeButton = Theme.secondary("Remove selected");
     private final JButton clearButton = Theme.secondary("Clear cart");
+    private final JButton salesButton = Theme.ai("Check for sales", false);
 
     private final JTextField nameField = new JTextField(16);
     private final JTextField qtyField = new JTextField("1", 4);
@@ -77,6 +78,7 @@ public class CartPanel extends JPanel {
     private final JLabel message = Theme.label(" ", Font.PLAIN, 12f, Theme.DANGER_FG);
     private final transient Border nameBorder = nameField.getBorder();
     private final transient Border qtyBorder = qtyField.getBorder();
+    private boolean checking;
 
     /** @param dataChanged called after the cart changes, so other pages can refresh */
     public CartPanel(AgentController controller, Runnable dataChanged) {
@@ -105,6 +107,9 @@ public class CartPanel extends JPanel {
         editButton.addActionListener(e -> editSelected());
         removeButton.addActionListener(e -> removeSelected());
         clearButton.addActionListener(e -> clearCart());
+        salesButton.setToolTipText("Look for every item in this week's flyers (Flyers tab)");
+        salesButton.addActionListener(e -> checkSales(cartNames(), true));
+        buttons.add(salesButton);
         buttons.add(editButton);
         buttons.add(removeButton);
         buttons.add(clearButton);
@@ -210,6 +215,7 @@ public class CartPanel extends JPanel {
         header.setRight(CartTableModel.summary(items));
         cards.show(tableArea, items.isEmpty() ? EMPTY : TABLE);
         clearButton.setEnabled(!items.isEmpty());
+        salesButton.setEnabled(!items.isEmpty() && !checking);
         updateButtons();
     }
 
@@ -244,6 +250,66 @@ public class CartPanel extends JPanel {
         nameField.requestFocusInWindow();
         refresh();
         dataChanged.run();
+        if (!wasThere) {
+            checkSales(List.of(inCart.getName()), false);
+        }
+    }
+
+    private List<String> cartNames() {
+        return controller.getCartItems().stream().map(CartItem::getName).toList();
+    }
+
+    /**
+     * Looks for items in this week's flyers in the background (F02); sale alerts appear in the
+     * Alerts strip. {@code manual} means the user clicked Check for sales, so say what happened.
+     */
+    private void checkSales(List<String> names, boolean manual) {
+        if (names.isEmpty() || checking) {
+            return;
+        }
+        if (!manual && controller.getCurrentFlyers().isEmpty()) {
+            return;                                              // nothing to check against
+        }
+        String before = message.getText();
+        Background.run(busy -> {
+                    checking = busy;
+                    if (busy && manual) {
+                        message.setForeground(Theme.MUTED);
+                        message.setText("Looking for your items in this week's flyers…");
+                    }
+                    refresh();
+                },
+                () -> controller.findSales(names),
+                check -> {
+                    controller.applySales(check);
+                    refresh();
+                    dataChanged.run();
+                    String text = saleMessage(check, manual);
+                    if (text != null) {
+                        message.setForeground(check.getMatches().isEmpty() ? Theme.MUTED : Theme.SALE_FG);
+                        message.setText(manual || before.isBlank() ? text : before + " " + text);
+                    }
+                },
+                ex -> {
+                    message.setForeground(Theme.DANGER_FG);
+                    message.setText("Sales could not be checked: " + ex.getMessage());
+                });
+    }
+
+    /** What to tell the user after a sale check (null to say nothing). */
+    static String saleMessage(com.recipeagent.controller.SaleCheck check, boolean manual) {
+        if (!check.wasRun()) {
+            return manual ? check.getSkippedReason() : null;
+        }
+        int n = check.getMatches().size();
+        if (n == 0) {
+            return manual ? "None of your items are on sale this week." : null;
+        }
+        if (n == 1) {
+            com.recipeagent.model.SaleMatch m = check.getMatches().get(0);
+            return m.getCartItem() + " is on sale at " + m.getStore() + " for " + m.getFlyerItem().formattedPrice() + "!";
+        }
+        return n + " items are on sale this week. See the On sale column.";
     }
 
     /** "Added milk." or "milk was already in your cart; it now has 3 L." */
@@ -410,15 +476,17 @@ public class CartPanel extends JPanel {
                     chipBg = OTHER_BG;
                     chipFg = Theme.TEXT;
                 }
-            } else if (value instanceof Boolean) {
-                boolean sale = (Boolean) value;
-                shown = sale ? "On sale" : "";
-                if (sale) {
-                    chipBg = Theme.PRIMARY_LIGHT;
-                    chipFg = Theme.SALE_FG;
-                }
+            } else if (modelCol == CartTableModel.SALE_COLUMN && value != null && !value.toString().isEmpty()) {
+                chipBg = Theme.PRIMARY_LIGHT;
+                chipFg = Theme.SALE_FG;
             }
             super.getTableCellRendererComponent(t, shown, selected, false, row, column);
+            if (modelCol == CartTableModel.SALE_COLUMN) {
+                CartItem item = model.getItemAt(t.convertRowIndexToModel(row));
+                setToolTipText(item.getSaleItemName() == null ? null : "In the flyer as " + item.getSaleItemName());
+            } else {
+                setToolTipText(null);
+            }
             setHorizontalAlignment(LEFT);
             setBorder(BorderFactory.createEmptyBorder(0, 10, 0, 10));
             setFont(Theme.font(modelCol == 0 ? Font.BOLD : Font.PLAIN, 12f));

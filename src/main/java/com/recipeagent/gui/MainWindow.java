@@ -31,6 +31,7 @@ public class MainWindow implements NotificationListener {
     static final String RECIPE = "Recipe";
     static final String CART = "Cart";
     static final String HISTORY = "History";
+    static final String FLYERS = "Flyers";
     static final String PROFILE = "Profile";
 
     private final AgentController controller;
@@ -45,6 +46,7 @@ public class MainWindow implements NotificationListener {
     private final RecipePanel recipePanel;
     private final CartPanel cartPanel;
     private final HistoryPanel historyPanel;
+    private final FlyersPanel flyersPanel;
     private final ProfilePanel profilePanel;
     private final ChatPanel chatPanel;
     private Timer dailyCheck;
@@ -56,6 +58,7 @@ public class MainWindow implements NotificationListener {
         this.pantryPanel = new PantryPanel(controller);
         this.recipePanel = new RecipePanel(controller, refresh, tabBar::select);
         this.cartPanel = new CartPanel(controller, refresh);
+        this.flyersPanel = new FlyersPanel(controller, refresh);
         this.historyPanel = new HistoryPanel(controller, refresh,
                 r -> {
                     recipePanel.showRecipe(r);
@@ -70,6 +73,7 @@ public class MainWindow implements NotificationListener {
         addPage(RECIPE, recipePanel);
         addPage(CART, cartPanel);
         addPage(HISTORY, historyPanel);
+        addPage(FLYERS, flyersPanel);
         addPage(PROFILE, profilePanel);
         tabBar.onSelect(name -> {
             pages.show(pageArea, name);
@@ -137,6 +141,7 @@ public class MainWindow implements NotificationListener {
         recipePanel.refresh();
         cartPanel.refresh();
         historyPanel.refresh();
+        flyersPanel.refresh();
         profilePanel.refresh();
         footer.setAiStatus(controller.getAiStatus(), controller.isAiAvailable());
     }

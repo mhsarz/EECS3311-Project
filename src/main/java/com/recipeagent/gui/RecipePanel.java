@@ -363,7 +363,7 @@ public class RecipePanel extends JPanel {
             c.gridx = 0;
             c.weightx = 1;
             c.fill = GridBagConstraints.HORIZONTAL;
-            ingredientRows.add(Theme.label(ing.getName(), Font.BOLD, 12f, Theme.TEXT), c);
+            ingredientRows.add(ingredientLabel(ing.getName(), controller.getPantryMatch(ing.getName()).orElse(null)), c);
 
             c.gridx = 1;
             c.weightx = 0;
@@ -552,11 +552,26 @@ public class RecipePanel extends JPanel {
 
     // ------------------------------------------------------------ F11 check
 
+    /** Cook This: checks the pantry in the background (the agent may match names, F11), then shows the result. */
     private void cookThis() {
-        if (recipe == null) {
+        if (recipe == null || aiBusy) {
             return;
         }
-        IngredientCheck check = controller.checkIngredients(recipe);
+        Recipe current = recipe;
+        say("Checking your pantry…", Theme.MUTED);
+        Background.run(this::setAiBusy,
+                () -> controller.checkIngredients(current),
+                check -> {
+                    clearNotice();
+                    refresh();                                   // shows any names the agent matched
+                    if (recipe == current) {
+                        showCheck(check);
+                    }
+                },
+                ex -> say("The pantry could not be checked: " + ex.getMessage(), Theme.DANGER_FG));
+    }
+
+    private void showCheck(IngredientCheck check) {
         if (check.allInStock()) {
             int choice = JOptionPane.showConfirmDialog(this,
                     "You have everything for this recipe.\nMark it as cooked now? "
@@ -630,16 +645,52 @@ public class RecipePanel extends JPanel {
         return add[0];
     }
 
+    /** Adds items to the cart in one go, then looks for them in this week's flyers (F02). */
     private void addToCart(List<Ingredient> items) {
+        List<CartItem> toAdd = new ArrayList<>();
         List<String> added = new ArrayList<>();
         for (Ingredient i : items) {
             double qty = i.getQuantity() > 0 ? i.getQuantity() : 1;
-            controller.addToCart(new CartItem(i.getName(), qty, i.getQuantity() > 0 ? i.getUnit() : "",
-                    CartSource.RECIPE));
+            toAdd.add(new CartItem(i.getName(), qty, i.getQuantity() > 0 ? i.getUnit() : "", CartSource.RECIPE));
             added.add(i.getName());
         }
+        controller.addToCart(toAdd);
         dataChanged.run();
-        say("Added to your cart: " + String.join(", ", added) + ".", Theme.PRIMARY);
+        String text = "Added to your cart: " + String.join(", ", added) + ".";
+        say(text, Theme.PRIMARY);
+        if (controller.getCurrentFlyers().isEmpty()) {
+            return;
+        }
+        Background.run(b -> { },
+                () -> controller.findSales(added),
+                check -> {
+                    controller.applySales(check);
+                    dataChanged.run();
+                    if (!check.getMatches().isEmpty()) {
+                        say(text + " " + CartPanel.saleMessage(check, false), Theme.SALE_FG);
+                    }
+                },
+                ex -> { });
+    }
+
+    /** The ingredient's name, with the pantry item it was matched to (F11), e.g. "scallions (your green onions)". */
+    private static JComponent ingredientLabel(String name, String pantryMatch) {
+        JLabel l = Theme.label(name, Font.BOLD, 12f, Theme.TEXT);
+        if (pantryMatch == null) {
+            return l;
+        }
+        JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        p.setOpaque(false);
+        p.add(l);
+        JLabel m = Theme.muted(matchText(pantryMatch));
+        m.setToolTipText("The agent matched this to " + pantryMatch + " in your pantry");
+        p.add(m);
+        return p;
+    }
+
+    /** "(your green onions)". */
+    static String matchText(String pantryMatch) {
+        return "(your " + pantryMatch + ")";
     }
 
     // ------------------------------------------------------------ F06 cook + undo

@@ -1,0 +1,114 @@
+package com.recipeagent.flyer;
+
+import com.sun.net.httpserver.HttpServer;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+/** Getting flyer text from a file or the web (F10). The web test uses a small local server. */
+class FlyerSourcesTest {
+
+    @TempDir
+    Path tmp;
+
+    @Test
+    void fileSourceReadsTextAndTidiesIt() throws Exception {
+        Path f = tmp.resolve("nofrills.txt");
+        Files.writeString(f, "﻿No Frills   weekly flyer\r\n\r\n\r\n\r\nMilk 4L   $5.49\r\n", StandardCharsets.UTF_8);
+        FileFlyerSource src = new FileFlyerSource(f);
+        assertEquals("No Frills weekly flyer\n\nMilk 4L $5.49", src.fetch("No Frills"));
+        assertEquals("the file nofrills.txt", src.describe());
+    }
+
+    @Test
+    void fileSourceTurnsASavedWebPageIntoText() throws Exception {
+        Path f = tmp.resolve("metro.html");
+        Files.writeString(f, "<html><head><style>p{color:red}</style><script>alert(1)</script></head>"
+                + "<body><h1>Metro</h1><p>Bananas &amp; apples</p><div>$0.69/lb</div></body></html>");
+        String text = new FileFlyerSource(f).fetch("Metro");
+        assertTrue(text.contains("Bananas & apples"));
+        assertTrue(text.contains("$0.69/lb"));
+        assertFalse(text.contains("alert"));
+        assertFalse(text.contains("<"));
+    }
+
+    @Test
+    void fileSourceRejectsMissingEmptyAndBinaryFiles() throws Exception {
+        FlyerException missing = assertThrows(FlyerException.class,
+                () -> new FileFlyerSource(tmp.resolve("nope.txt")).fetch("X"));
+        assertEquals("The file nope.txt was not found.", missing.getMessage());
+        assertFalse(missing.isUploadInstead());
+
+        Path empty = tmp.resolve("empty.txt");
+        Files.writeString(empty, "  \n ");
+        assertEquals("The file empty.txt is empty.",
+                assertThrows(FlyerException.class, () -> new FileFlyerSource(empty).fetch("X")).getMessage());
+
+        Path pdf = tmp.resolve("flyer.pdf");
+        Files.write(pdf, "%PDF-1.7 binary".getBytes(StandardCharsets.US_ASCII));
+        assertTrue(assertThrows(FlyerException.class, () -> new FileFlyerSource(pdf).fetch("X"))
+                .getMessage().contains("not a text file"));
+
+        Path image = tmp.resolve("flyer.png");
+        Files.write(image, new byte[]{(byte) 0x89, 'P', 'N', 'G', 0, 0, 1});
+        assertTrue(assertThrows(FlyerException.class, () -> new FileFlyerSource(image).fetch("X"))
+                .getMessage().contains("not a text file"));
+    }
+
+    @Test
+    void fileSourceReadsWindowsTextToo() throws Exception {
+        Path f = tmp.resolve("loblaws.txt");
+        Files.write(f, "Crème fraîche $3.99".getBytes("windows-1252"));
+        assertEquals("Crème fraîche $3.99", new FileFlyerSource(f).fetch("Loblaws"));
+    }
+
+    @Test
+    void onlineSourceAsksForAnUploadWhenNotSetUp() {
+        OnlineFlyerSource src = new OnlineFlyerSource(" ");
+        assertFalse(src.isConfigured());
+        FlyerException e = assertThrows(FlyerException.class, () -> src.fetch("Metro"));
+        assertTrue(e.isUploadInstead());
+        assertTrue(e.getMessage().contains("upload the Metro flyer as a file"));
+    }
+
+    @Test
+    void onlineSourceFetchesAPageAndReportsErrors() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/flyers/", ex -> {
+            String path = ex.getRequestURI().getPath();
+            boolean ok = path.endsWith("/No%20Frills.html") || path.endsWith("/No Frills.html");
+            byte[] body = (ok ? "<html><body><p>Eggs 12 pack $3.99</p></body></html>" : "missing")
+                    .getBytes(StandardCharsets.UTF_8);
+            ex.sendResponseHeaders(ok ? 200 : 404, body.length);
+            try (OutputStream os = ex.getResponseBody()) {
+                os.write(body);
+            }
+        });
+        server.start();
+        try {
+            String template = "http://127.0.0.1:" + server.getAddress().getPort() + "/flyers/{store}.html";
+            OnlineFlyerSource src = new OnlineFlyerSource(template, java.net.http.HttpClient.newHttpClient());
+            assertTrue(src.isConfigured());
+            assertTrue(src.urlFor("No Frills").endsWith("/flyers/No%20Frills.html"));
+            assertEquals("Eggs 12 pack $3.99", src.fetch("No Frills"));
+            FlyerException e = assertThrows(FlyerException.class, () -> src.fetch("Metro"));
+            assertTrue(e.getMessage().contains("error 404"));
+            assertTrue(e.isUploadInstead());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void longTextIsCut() {
+        String text = FlyerText.tidy("a".repeat(FlyerText.MAX_CHARS + 50));
+        assertEquals(FlyerText.MAX_CHARS, text.length());
+    }
+}

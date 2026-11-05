@@ -210,9 +210,13 @@ class GuiLogicTest {
         assertEquals("L", m.getValueAt(0, 2));
         assertEquals(com.recipeagent.model.CartSource.CHAT, m.getValueAt(0, CartTableModel.SOURCE_COLUMN));
         assertEquals(com.recipeagent.model.CartSource.MANUAL, m.getValueAt(1, CartTableModel.SOURCE_COLUMN));
-        assertEquals(Boolean.TRUE, m.getValueAt(1, CartTableModel.SALE_COLUMN));
-        assertEquals("2 items · 1 on sale", CartTableModel.summary(List.of(milk, eggs)));
-        assertEquals("1 item", CartTableModel.summary(List.of(milk)));
+        assertEquals("On sale", m.getValueAt(1, CartTableModel.SALE_COLUMN));        // store not known
+        assertEquals("", m.getValueAt(0, CartTableModel.SALE_COLUMN));
+        milk.setSale("No Frills", new com.recipeagent.model.FlyerItem("2% Milk 4L", 5.49));
+        assertEquals("No Frills · $5.49", CartTableModel.saleLabel(milk));
+        assertEquals("2 items · 2 on sale", CartTableModel.summary(List.of(milk, eggs)));
+        assertEquals("1 item · 1 on sale", CartTableModel.summary(List.of(milk)));
+        assertEquals("1 item", CartTableModel.summary(List.of(new com.recipeagent.model.CartItem("tea", 1))));
         assertEquals("2 L", CartTableModel.amount(milk));
         assertEquals("12", CartTableModel.amount(eggs));
         assertEquals("Added milk.", CartPanel.addedMessage(milk, false));
@@ -336,5 +340,48 @@ class GuiLogicTest {
 
     private static String message(Runnable r) {
         return assertThrows(IllegalArgumentException.class, r::run).getMessage();
+    }
+
+    @Test
+    void flyerTableRowsFiltersAndCartMatches() {
+        com.recipeagent.model.Flyer nf = new com.recipeagent.model.Flyer("No Frills", LocalDate.of(2026, 11, 11),
+                List.of(new com.recipeagent.model.FlyerItem("2% Milk 4L", 5.49), new com.recipeagent.model.FlyerItem("Chicken thighs", 6.99)));
+        com.recipeagent.model.Flyer metro = new com.recipeagent.model.Flyer("Metro", null,
+                List.of(new com.recipeagent.model.FlyerItem("Milk 2L", 3.49)));
+        com.recipeagent.model.CartItem milk = new com.recipeagent.model.CartItem("milk", 1);
+        milk.setSale("No Frills", nf.getItems().get(0));
+
+        FlyersTableModel m = new FlyersTableModel();
+        m.setFlyers(List.of(nf, metro), List.of(milk), null, "");
+        assertEquals(3, m.getRowCount());
+        assertEquals("milk", m.getValueAt(0, FlyersTableModel.CART_COLUMN));
+        assertEquals("", m.getValueAt(2, FlyersTableModel.CART_COLUMN));
+        assertEquals(5.49, m.getValueAt(0, FlyersTableModel.PRICE_COLUMN));
+        assertNull(m.getValueAt(2, FlyersTableModel.ENDS_COLUMN));
+        m.setFlyers(List.of(nf, metro), List.of(milk), "metro", " MILK ");
+        assertEquals(1, m.getRowCount());
+        assertEquals("Milk 2L", m.getValueAt(0, 1));
+        assertEquals("3 sale items from 2 stores", FlyersTableModel.summary(List.of(nf, metro)));
+        assertEquals("1 sale item from 1 store", FlyersTableModel.summary(List.of(metro)));
+        assertEquals("No flyers yet", FlyersTableModel.summary(List.of()));
+    }
+
+    @Test
+    void flyerPageMessages() {
+        assertEquals("No Frills", FlyersPanel.guessStore("nofrills-week45.txt", List.of("Metro", "No Frills")));
+        assertEquals("Food Basics", FlyersPanel.guessStore("Food_Basics.TXT", List.of("Food Basics")));
+        assertNull(FlyersPanel.guessStore("flyer.txt", List.of("Metro")));
+
+        com.recipeagent.model.FlyerItem eggs = new com.recipeagent.model.FlyerItem("Large Eggs 12", 3.99);
+        assertEquals("eggs is on sale at Metro for $3.99!", CartPanel.saleMessage(saleCheck(
+                List.of("eggs"), List.of(new com.recipeagent.model.SaleMatch("eggs", eggs, "Metro"))), false));
+        assertNull(CartPanel.saleMessage(saleCheck(List.of("eggs"), List.of()), false));
+        assertEquals("None of your items are on sale this week.", CartPanel.saleMessage(saleCheck(List.of("eggs"), List.of()), true));
+        assertEquals("(your green onions)", RecipePanel.matchText("green onions"));
+    }
+
+    private static com.recipeagent.controller.SaleCheck saleCheck(List<String> checked,
+                                                                  List<com.recipeagent.model.SaleMatch> matches) {
+        return new com.recipeagent.controller.SaleCheck(checked, matches, null);
     }
 }

@@ -4,17 +4,26 @@ import com.recipeagent.agent.AgentAction;
 import com.recipeagent.agent.AgentTool;
 import com.recipeagent.agent.RecipeAgent;
 import com.recipeagent.agent.tools.CartTool;
+import com.recipeagent.agent.tools.FlyerTool;
 import com.recipeagent.agent.tools.PantryTool;
 import com.recipeagent.agent.tools.ProfileTool;
 import com.recipeagent.cart.ShoppingCart;
 import com.recipeagent.command.CommandHistory;
 import com.recipeagent.command.CookRecipeCommand;
 import com.recipeagent.config.AppConfig;
+import com.recipeagent.flyer.FileFlyerSource;
+import com.recipeagent.flyer.FlyerException;
+import com.recipeagent.flyer.FlyerService;
+import com.recipeagent.flyer.FlyerSource;
+import com.recipeagent.flyer.OnlineFlyerSource;
 import com.recipeagent.history.RecipeHistory;
 import com.recipeagent.llm.ClaudeClient;
 import com.recipeagent.llm.LLMClient;
 import com.recipeagent.llm.LLMClientProxy;
+import com.recipeagent.llm.LLMException;
+import com.recipeagent.llm.LLMUnavailableException;
 import com.recipeagent.model.CartItem;
+import com.recipeagent.model.Flyer;
 import com.recipeagent.model.Ingredient;
 import com.recipeagent.model.IngredientCheck;
 import com.recipeagent.model.IngredientStatus;
@@ -22,6 +31,7 @@ import com.recipeagent.model.Notification;
 import com.recipeagent.model.PantryItem;
 import com.recipeagent.model.Recipe;
 import com.recipeagent.model.RecipeRequest;
+import com.recipeagent.model.SaleMatch;
 import com.recipeagent.model.StorageLocation;
 import com.recipeagent.model.Substitution;
 import com.recipeagent.model.UserProfile;
@@ -30,10 +40,16 @@ import com.recipeagent.pantry.PantryManager;
 import com.recipeagent.prompt.ClaudePromptBuilder;
 import com.recipeagent.storage.JsonStorage;
 
+import java.nio.file.Path;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -41,7 +57,7 @@ import java.util.Optional;
  * The single entry point the GUI (MainWindow) and the CLI (CLIApp) use.
  * <p>
  * Facade pattern: this is the <b>Facade</b>. It offers one simple method per feature and
- * coordinates the subsystems behind it (agent, pantry, cart, history, profile, undo,
+ * coordinates the subsystems behind it (agent, pantry, cart, flyers, history, profile, undo,
  * notifications, storage), so both interfaces stay thin and depend on one class only.
  * Every method that changes data also saves it, so nothing is lost when the app closes.
  */
@@ -51,6 +67,7 @@ public class AgentController {
     static final String CART_KEY = "cart";
     static final String HISTORY_KEY = "history";
     static final String PROFILE_KEY = "profile";
+    static final String FLYERS_KEY = "flyers";
 
     /** Pantry items that expire within this many days get an alert (F05). */
     public static final int EXPIRY_DAYS = 3;
@@ -67,6 +84,12 @@ public class AgentController {
     private final JsonStorage storage;
     private final LLMClientProxy llm;
     private final Clock clock;
+    private final FlyerService flyers;
+    /**
+     * Ingredient name (lower case) -> pantry item it is stored as, from the agent's name
+     * matching (F11); "" means the agent found no match. Asked once per name.
+     */
+    private final Map<String, String> nameMatches = new HashMap<>();
 
     /**
      * Wires all parts together. Use {@link #create(AppConfig)} in the app; this constructor
@@ -75,6 +98,12 @@ public class AgentController {
      * @param realLlm the real LLM client, or null when there is no API key
      */
     public AgentController(LLMClient realLlm, int dailyLimit, JsonStorage storage, Clock clock) {
+        this(realLlm, dailyLimit, storage, clock, new OnlineFlyerSource(null));
+    }
+
+    /** Same as above with the source used for online flyers (F10). */
+    public AgentController(LLMClient realLlm, int dailyLimit, JsonStorage storage, Clock clock,
+                           FlyerSource onlineFlyers) {
         if (storage == null || clock == null) {
             throw new IllegalArgumentException("Storage and clock are required");
         }
@@ -87,10 +116,12 @@ public class AgentController {
         this.profile = saved != null ? saved : new UserProfile();
         this.notifications = NotificationCenter.getInstance();
         this.commands = new CommandHistory();
+        this.flyers = new FlyerService(onlineFlyers, storage.load(FLYERS_KEY, FlyerService.Data.class));
         this.llm = new LLMClientProxy(realLlm, dailyLimit, storage, clock);
-        List<AgentTool> tools = List.of(
-                new PantryTool(pantry, clock), new ProfileTool(profile), new CartTool(cart));
+        List<AgentTool> tools = List.of(new PantryTool(pantry, clock), new ProfileTool(profile),
+                new CartTool(cart), new FlyerTool(flyers, clock));
         this.agent = new RecipeAgent(llm, new ClaudePromptBuilder(), tools);
+        clearEndedSales();
     }
 
     /** Builds the controller from the app settings (.env). */
@@ -98,8 +129,8 @@ public class AgentController {
         LLMClient real = config.getApiKey()
                 .map(key -> (LLMClient) new ClaudeClient(key, config.getModel()))
                 .orElse(null);
-        return new AgentController(real, config.getDailyLimit(),
-                new JsonStorage(config.getDataDir()), Clock.systemDefaultZone());
+        return new AgentController(real, config.getDailyLimit(), new JsonStorage(config.getDataDir()),
+                Clock.systemDefaultZone(), new OnlineFlyerSource(config.getFlyerUrlTemplate().orElse(null)));
     }
 
     // ------------------------------------------------------------ F03 pantry
@@ -132,6 +163,7 @@ public class AgentController {
             return false;
         }
         savePantry();
+        forgetNoMatches();
         // Alert right away if a newly added item is already close to its date (F05).
         // Merging into an existing item does not repeat its alert.
         if (existing.isEmpty() && stored.isExpiringWithin(EXPIRY_DAYS, today())) {
@@ -151,6 +183,7 @@ public class AgentController {
         LocalDate oldDate = pantry.findById(id).map(PantryItem::getBestBefore).orElse(null);
         PantryItem updated = pantry.updateItem(id, name, quantity, unit, location, bestBefore);
         savePantry();
+        forgetNoMatches();
         boolean dateChanged = !Objects.equals(oldDate, bestBefore);
         if (dateChanged && updated.isExpiringWithin(EXPIRY_DAYS, today())) {
             notifications.publish(Notification.expiry(updated, today()));
@@ -237,22 +270,96 @@ public class AgentController {
     }
 
     /**
-     * Lists the recipe's missing ingredients (F11). Basics such as salt and water are not
-     * counted (see RecipeAgent.BASIC_STAPLES), nor a substitute whose pantry items are all
-     * at home (F07). Currently compares names exactly; AI name
-     * matching (e.g. "scallions" = "green onions") is added with the flyers work.
+     * Lists the recipe's missing ingredients (F11). The pantry is compared by exact name and
+     * quantity first; for names with no exact match the agent asks the LLM whether a pantry
+     * item is the same food ("scallions" = "green onions"), once per name. If the AI is
+     * unavailable, only exact names are used. Basics such as salt and water are not counted
+     * (see RecipeAgent.BASIC_STAPLES), nor a substitute whose pantry items are all at home (F07).
+     * May call the LLM, so the GUI runs it in the background.
      */
     public IngredientCheck checkIngredients(Recipe recipe) {
+        matchUnknownNames(recipe);
         IngredientCheck check = pantry.checkRecipe(recipe);
-        for (String name : check.getMissingNames()) {
+        for (Ingredient ing : recipe.getIngredients()) {
+            String name = ing.getName();
+            if (!check.getMissingNames().stream().anyMatch(n -> n.equalsIgnoreCase(name))) {
+                continue;
+            }
             List<String> parts = recipe.getSubstituteParts(name);
             boolean substituteAtHome = !parts.isEmpty() && pantry.findByName(name).isEmpty()
                     && substituteInPantry(parts);
             if (RecipeAgent.isBasicStaple(name) || substituteAtHome) {
                 check.markFound(name);
+                continue;
+            }
+            Optional<PantryItem> other = matchedPantryItem(name);
+            if (other.isPresent() && pantry.findByName(name).isEmpty()) {
+                double have = other.get().getQuantity();
+                if (have >= ing.getQuantity()) {
+                    check.markFound(name);
+                } else {
+                    check.replaceMissing(name, new Ingredient(name, ing.getQuantity() - have, ing.getUnit()));
+                }
             }
         }
         return check;
+    }
+
+    /**
+     * The pantry item an ingredient was matched to by name (F11), e.g. "green onions" for
+     * "scallions"; empty if it has its own name in the pantry or no match is known.
+     */
+    public Optional<String> getPantryMatch(String ingredient) {
+        if (ingredient == null || !pantry.findByName(ingredient).isEmpty()) {
+            return Optional.empty();
+        }
+        return matchedPantryItem(ingredient).map(PantryItem::getName);
+    }
+
+    /** Asks the agent about ingredient names with no exact pantry match that were not asked before. */
+    private void matchUnknownNames(Recipe recipe) {
+        if (recipe == null) {
+            throw new IllegalArgumentException("Recipe must not be null");
+        }
+        List<String> unknown = new ArrayList<>();
+        for (Ingredient ing : recipe.getIngredients()) {
+            String name = ing.getName();
+            String key = key(name);
+            if (pantry.findByName(name).isEmpty() && !RecipeAgent.isBasicStaple(name)
+                    && recipe.getSubstituteParts(name).isEmpty() && !nameMatches.containsKey(key)
+                    && unknown.stream().noneMatch(u -> u.equalsIgnoreCase(name))) {
+                unknown.add(name);
+            }
+        }
+        List<String> pantryNames = pantry.getAll().stream().map(PantryItem::getName).toList();
+        if (unknown.isEmpty() || pantryNames.isEmpty() || !llm.isAvailable()) {
+            return;                                              // UC11 2a: exact names only
+        }
+        try {
+            Map<String, String> found = agent.matchNames(unknown, pantryNames);
+            for (String name : unknown) {
+                nameMatches.put(key(name), found.getOrDefault(name, ""));
+            }
+        } catch (LLMException e) {
+            // keep exact matching; the names are asked again next time
+        }
+    }
+
+    private Optional<PantryItem> matchedPantryItem(String ingredient) {
+        String match = nameMatches.get(key(ingredient));
+        if (match == null || match.isEmpty()) {
+            return Optional.empty();
+        }
+        return pantry.findByName(match).stream().findFirst();
+    }
+
+    /** A new pantry item may match a name the agent could not match before, so ask again. */
+    private void forgetNoMatches() {
+        nameMatches.values().removeIf(String::isEmpty);
+    }
+
+    private static String key(String name) {
+        return name == null ? "" : name.trim().toLowerCase(Locale.ROOT);
     }
 
     /**
@@ -273,6 +380,9 @@ public class AgentController {
                 continue;
             }
             List<PantryItem> found = pantry.findByName(ing.getName());
+            if (found.isEmpty()) {
+                found = matchedPantryItem(ing.getName()).map(List::of).orElse(List.of());
+            }
             boolean basic = RecipeAgent.isBasicStaple(ing.getName());
             if (found.isEmpty()) {
                 result.add(basic ? IngredientStatus.BASIC : IngredientStatus.MISSING);
@@ -343,7 +453,11 @@ public class AgentController {
      * @return ingredient names that were not in the pantry and so were skipped
      */
     public List<String> markCooked(Recipe recipe) {
-        CookRecipeCommand cmd = new CookRecipeCommand(recipe, pantry, history, today());
+        Map<String, String> pantryNames = new HashMap<>();
+        for (Ingredient ing : recipe.getIngredients()) {
+            getPantryMatch(ing.getName()).ifPresent(p -> pantryNames.put(key(ing.getName()), p));
+        }
+        CookRecipeCommand cmd = new CookRecipeCommand(recipe, pantry, history, today(), pantryNames);
         commands.run(cmd);
         savePantry();
         saveHistory();
@@ -371,13 +485,119 @@ public class AgentController {
     // ------------------------------------------------------------ F02 cart
 
     /**
-     * Adds an item to the cart, merging with the same name (F02). The sale check against
-     * this week's flyers is added with the flyers work.
+     * Adds an item to the cart, merging with the same name (F02). This does not call the AI;
+     * run {@link #checkSales} (or findSales + applySales) for the item afterwards to look for
+     * it in this week's flyers.
      */
     public CartItem addToCart(CartItem item) {
         CartItem inCart = cart.add(item);
         saveCart();
         return inCart;
+    }
+
+    /** Adds several items at once, e.g. a recipe's missing ingredients (F11), saving once. */
+    public List<CartItem> addToCart(List<CartItem> items) {
+        List<CartItem> result = new ArrayList<>();
+        for (CartItem i : items) {
+            result.add(cart.add(i));
+        }
+        saveCart();
+        return result;
+    }
+
+    /**
+     * Checks cart items against this week's flyers and marks the ones on sale, sending a sale
+     * alert for each new sale (F02). Skipped (with a reason) when there are no current flyers
+     * or the AI is unavailable; the cart items are kept either way.
+     */
+    public SaleCheck checkSales(Collection<String> cartItemNames) {
+        SaleCheck check = findSales(cartItemNames);
+        applySales(check);
+        return check;
+    }
+
+    /**
+     * The slow part of {@link #checkSales}: asks the agent which items are on sale, without
+     * changing anything. The GUI runs this in the background and then calls applySales.
+     */
+    public SaleCheck findSales(Collection<String> cartItemNames) {
+        List<String> names = new ArrayList<>();
+        if (cartItemNames != null) {
+            for (String n : cartItemNames) {
+                cart.find(n).ifPresent(i -> {
+                    if (!names.contains(i.getName())) {
+                        names.add(i.getName());
+                    }
+                });
+            }
+        }
+        if (names.isEmpty()) {
+            return new SaleCheck(names, List.of(), null);
+        }
+        List<Flyer> current = flyers.getCurrentFlyers(today());
+        if (current.isEmpty()) {
+            return SaleCheck.skipped(names, "No flyers for this week yet, so sales were not checked.");
+        }
+        if (!llm.isAvailable()) {
+            return SaleCheck.skipped(names, "Sales were not checked because the AI is unavailable.");
+        }
+        try {
+            return new SaleCheck(names, agent.matchSales(names, current), null);
+        } catch (LLMException e) {
+            return SaleCheck.skipped(names, "Sales were not checked: " + e.getMessage());
+        }
+    }
+
+    /** Marks the checked cart items as on sale or not, and alerts about new sales (F02). */
+    public void applySales(SaleCheck check) {
+        if (check == null || !check.wasRun()) {
+            return;                                              // keep what was known before
+        }
+        for (String name : check.getChecked()) {
+            Optional<CartItem> item = cart.find(name);
+            if (item.isEmpty()) {
+                continue;                                        // removed meanwhile
+            }
+            CartItem c = item.get();
+            Optional<SaleMatch> match = check.getMatches().stream()
+                    .filter(m -> m.getCartItem().equalsIgnoreCase(name)).findFirst();
+            if (match.isPresent()) {
+                SaleMatch m = match.get();
+                boolean same = c.isOnSale() && m.getStore().equals(c.getSaleStore())
+                        && m.getFlyerItem().getName().equals(c.getSaleItemName())
+                        && Objects.equals(m.getFlyerItem().getSalePrice(), c.getSalePrice());
+                c.setSale(m.getStore(), m.getFlyerItem());
+                if (!same) {
+                    notifications.publish(Notification.sale(c, m.getFlyerItem(), m.getStore()));
+                }
+            } else {
+                c.clearSale();
+            }
+        }
+        saveCart();
+    }
+
+    /** Clears sale marks whose store has no current flyer any more (the sale ended). */
+    private void clearEndedSales() {
+        boolean changed = false;
+        for (CartItem c : cart.getItems()) {
+            if (!c.isOnSale()) {
+                continue;
+            }
+            String store = c.getSaleStore();
+            boolean running = store != null && flyers.getFlyer(store).map(f -> f.isCurrent(today())).orElse(false);
+            if (!running) {
+                c.clearSale();
+                changed = true;
+            }
+        }
+        if (changed) {
+            saveCart();
+        }
+    }
+
+    private List<String> cartNames() {
+        return cart.getItems().stream().map(CartItem::getName).toList();
     }
 
     public boolean removeFromCart(String name) {
@@ -403,6 +623,113 @@ public class AgentController {
 
     public List<CartItem> getCartItems() {
         return cart.getItems();
+    }
+
+    // ------------------------------------------------------------ F10 flyers
+
+    /** Every store in the list (F10). */
+    public List<String> getFlyerStores() {
+        return flyers.getStores();
+    }
+
+    /** The stores whose flyers Refresh reads. */
+    public List<String> getSelectedStores() {
+        return flyers.getSelectedStores();
+    }
+
+    public boolean isStoreSelected(String store) {
+        return flyers.isSelected(store);
+    }
+
+    public void setStoreSelected(String store, boolean selected) {
+        if (flyers.setSelected(store, selected)) {
+            saveFlyers();
+        }
+    }
+
+    /** Adds a store to the list and selects it; returns its name as stored. */
+    public String addFlyerStore(String store) {
+        String name = flyers.addStore(store);
+        saveFlyers();
+        return name;
+    }
+
+    /** True if FLYER_URL_TEMPLATE is set, so Refresh can read flyers from the web. */
+    public boolean isOnlineFlyersSetUp() {
+        FlyerSource online = flyers.getOnlineSource();
+        return !(online instanceof OnlineFlyerSource) || ((OnlineFlyerSource) online).isConfigured();
+    }
+
+    /** Every saved flyer, also ones whose sale ended. */
+    public List<Flyer> getFlyers() {
+        return flyers.getFlyers();
+    }
+
+    /** Flyers whose sale is still running. */
+    public List<Flyer> getCurrentFlyers() {
+        return flyers.getCurrentFlyers(today());
+    }
+
+    /**
+     * Upload Flyer (F10): reads a flyer file for a store (added to the list if new), asks the
+     * agent for its sale items, saves the flyer and checks the cart for sales (F02).
+     *
+     * @throws FlyerException          if the file can't be used (missing, empty, not text)
+     * @throws LLMUnavailableException if the AI is unavailable (the old flyer is kept)
+     * @throws LLMException            if the AI could not read the flyer
+     */
+    public FlyerRefresh uploadFlyer(Path file, String store) throws FlyerException {
+        String name = flyers.addStore(store);
+        flyers.setSource(name, new FileFlyerSource(file));
+        saveFlyers();
+        String raw = flyers.fetchRaw(name);
+        Flyer flyer = agent.extractFlyer(raw, name, today());
+        flyers.save(flyer);
+        saveFlyers();
+        clearEndedSales();
+        return new FlyerRefresh(List.of(flyer), Map.of(), false, checkSales(cartNames()));
+    }
+
+    /**
+     * Refresh Flyers (F10): for each selected store, gets the flyer text (an uploaded file or
+     * the online source), asks the agent for its sale items and saves the flyer; then checks
+     * the cart for sales (F02). A store that fails is reported and keeps its old flyer.
+     *
+     * @throws IllegalStateException   if no store is selected
+     * @throws LLMUnavailableException if the AI is unavailable (UC10 2a: old flyers are kept)
+     */
+    public FlyerRefresh refreshFlyers() {
+        List<String> stores = flyers.getSelectedStores();
+        if (stores.isEmpty()) {
+            throw new IllegalStateException("Pick at least one store first.");
+        }
+        if (!llm.isAvailable()) {
+            throw new LLMUnavailableException(llm.getUnavailableReason());
+        }
+        List<Flyer> updated = new ArrayList<>();
+        Map<String, String> problems = new LinkedHashMap<>();
+        boolean upload = false;
+        try {
+            for (String store : stores) {
+                try {
+                    Flyer flyer = agent.extractFlyer(flyers.fetchRaw(store), store, today());
+                    flyers.save(flyer);
+                    updated.add(flyer);
+                } catch (FlyerException e) {
+                    problems.put(store, e.getMessage());
+                    upload |= e.isUploadInstead();
+                } catch (LLMUnavailableException e) {
+                    throw e;
+                } catch (LLMException e) {
+                    problems.put(store, e.getMessage());
+                }
+            }
+        } finally {
+            saveFlyers();
+        }
+        clearEndedSales();
+        SaleCheck sales = updated.isEmpty() ? new SaleCheck(List.of(), List.of(), null) : checkSales(cartNames());
+        return new FlyerRefresh(updated, problems, upload, sales);
     }
 
     // ------------------------------------------------------------ F08 history
@@ -475,19 +802,21 @@ public class AgentController {
      * is saved afterwards.
      */
     public String chat(String message) {
+        List<String> before = cartNames();
         try {
             return agent.chat(message);
         } finally {
-            saveAfterChat(agent.getLastActions());
+            saveAfterChat(agent.getLastActions(), before);
         }
     }
 
     /** Starts the profile questionnaire (F04). */
     public String startProfileSetup() {
+        List<String> before = cartNames();
         try {
             return agent.startProfileSetup();
         } finally {
-            saveAfterChat(agent.getLastActions());
+            saveAfterChat(agent.getLastActions(), before);
         }
     }
 
@@ -495,9 +824,19 @@ public class AgentController {
         return agent.getLastActions();
     }
 
-    private void saveAfterChat(List<AgentAction> actions) {
+    /** Saves what the agent changed; items it added to the cart are checked for sales (F02). */
+    private void saveAfterChat(List<AgentAction> actions, List<String> cartBefore) {
         if (actions.stream().anyMatch(a -> a.succeededWith(CartTool.NAME))) {
             saveCart();
+            List<String> added = new ArrayList<>();
+            for (String name : cartNames()) {
+                if (cartBefore.stream().noneMatch(b -> b.equalsIgnoreCase(name))) {
+                    added.add(name);
+                }
+            }
+            if (!added.isEmpty()) {
+                checkSales(added);
+            }
         }
         if (actions.stream().anyMatch(a -> a.succeededWith(ProfileTool.NAME))) {
             saveProfile();
@@ -535,6 +874,10 @@ public class AgentController {
 
     private void saveHistory() {
         storage.save(HISTORY_KEY, new ArrayList<>(history.getAll()));
+    }
+
+    private void saveFlyers() {
+        storage.save(FLYERS_KEY, flyers.toData());
     }
 
     private void saveProfile() {

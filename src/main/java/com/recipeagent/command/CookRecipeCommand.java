@@ -25,6 +25,8 @@ public class CookRecipeCommand implements Command {
     private final PantryManager pantry;
     private final RecipeHistory history;
     private final LocalDate date;
+    /** Pantry names for ingredients that are in the pantry under another name (F11), lower-case keys. */
+    private final Map<String, String> pantryNames = new LinkedHashMap<>();
 
     /** Old quantity of each deducted ingredient, keyed by name. */
     private final Map<String, Double> snapshot = new LinkedHashMap<>();
@@ -40,6 +42,15 @@ public class CookRecipeCommand implements Command {
     /** Same as above with a fixed cook date, for tests. */
     public CookRecipeCommand(Recipe recipe, PantryManager pantry, RecipeHistory history,
                              LocalDate date) {
+        this(recipe, pantry, history, date, Map.of());
+    }
+
+    /**
+     * @param pantryNames ingredient name -> the pantry item it is stored as (e.g. "scallions"
+     *                    -> "green onions"), so the right pantry item is used up
+     */
+    public CookRecipeCommand(Recipe recipe, PantryManager pantry, RecipeHistory history,
+                             LocalDate date, Map<String, String> pantryNames) {
         if (recipe == null || pantry == null || history == null || date == null) {
             throw new IllegalArgumentException("Recipe, pantry, history and date are required");
         }
@@ -47,6 +58,13 @@ public class CookRecipeCommand implements Command {
         this.pantry = pantry;
         this.history = history;
         this.date = date;
+        if (pantryNames != null) {
+            pantryNames.forEach((k, v) -> {
+                if (k != null && v != null) {
+                    this.pantryNames.put(k.trim().toLowerCase(Locale.ROOT), v);
+                }
+            });
+        }
     }
 
     /**
@@ -62,8 +80,9 @@ public class CookRecipeCommand implements Command {
         snapshot.clear();
         skipped.clear();
         for (Ingredient ing : recipe.getIngredients()) {
-            String key = ing.getName().toLowerCase(Locale.ROOT);
-            double previous = pantry.deduct(ing.getName(), ing.getQuantity());
+            String name = pantryNames.getOrDefault(ing.getName().trim().toLowerCase(Locale.ROOT), ing.getName());
+            String key = name.toLowerCase(Locale.ROOT);
+            double previous = pantry.deduct(name, ing.getQuantity());
             if (previous == PantryManager.NOT_IN_PANTRY) {
                 skipped.add(ing.getName());
             } else {
