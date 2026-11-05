@@ -1,5 +1,6 @@
 package com.recipeagent.gui;
 
+import com.recipeagent.model.IngredientStatus;
 import com.recipeagent.model.PantryItem;
 import com.recipeagent.model.StorageLocation;
 import org.junit.jupiter.api.Test;
@@ -150,21 +151,109 @@ class GuiLogicTest {
     }
 
     @Test
-    void recipeTextForTheScreenAndDialogs() {
+    void recipeStepsAreNumbered() {
         assertEquals("1. Chop\n\n2. Boil", RecipePanel.formatSteps(List.of("Chop", "Boil")));
         assertEquals("", RecipePanel.formatSteps(List.of()));
+    }
 
-        String subs = RecipePanel.formatSubstitutes("buttermilk", List.of(
-                new com.recipeagent.model.Substitution("milk with lemon juice", "1 cup milk + 1 tbsp lemon", true),
-                new com.recipeagent.model.Substitution("plain yogurt", "", false)));
-        assertEquals("Instead of buttermilk you can use:\n"
-                + "\n1. milk with lemon juice  (in your pantry)\n    1 cup milk + 1 tbsp lemon"
-                + "\n2. plain yogurt", subs);
+    @Test
+    void recipeCardSummaryAndChips() {
+        List<IngredientStatus> st = List.of(IngredientStatus.IN_PANTRY, IngredientStatus.USE_SOON,
+                IngredientStatus.USE_SOON, IngredientStatus.MISSING, IngredientStatus.NOT_ENOUGH);
+        assertEquals("3 in pantry · 2 missing", RecipePanel.summary(st));
+        assertEquals("1 in pantry · 0 missing · 1 basic",
+                RecipePanel.summary(List.of(IngredientStatus.EXPIRED, IngredientStatus.BASIC)));
+        assertEquals("Uses 2 expiring items", RecipePanel.expiringText(st));
+        assertEquals("Uses 1 expiring item", RecipePanel.expiringText(List.of(IngredientStatus.USE_SOON)));
+        assertNull(RecipePanel.expiringText(List.of(IngredientStatus.IN_PANTRY)));
 
-        String missing = RecipePanel.formatMissing(List.of(
-                new com.recipeagent.model.Ingredient("soy sauce", 2, "tbsp"),
-                new com.recipeagent.model.Ingredient("pepper", 0, "")));
-        assertEquals("You are missing:\n\n•  soy sauce — 2 tbsp\n•  pepper — to taste", missing);
+        assertEquals("In pantry", RecipePanel.statusLabel(IngredientStatus.IN_PANTRY));
+        assertEquals("Use soon", RecipePanel.statusLabel(IngredientStatus.USE_SOON));
+        assertEquals("Not enough", RecipePanel.statusLabel(IngredientStatus.NOT_ENOUGH));
+        assertEquals("Missing", RecipePanel.statusLabel(IngredientStatus.MISSING));
+        assertEquals("Expired", RecipePanel.statusLabel(IngredientStatus.EXPIRED));
+        assertEquals("Basic", RecipePanel.statusLabel(IngredientStatus.BASIC));
+
+        assertTrue(RecipePanel.canSubstitute(IngredientStatus.MISSING));
+        assertTrue(RecipePanel.canSubstitute(IngredientStatus.NOT_ENOUGH));
+        assertTrue(RecipePanel.canSubstitute(IngredientStatus.EXPIRED));
+        assertFalse(RecipePanel.canSubstitute(IngredientStatus.IN_PANTRY));
+        assertFalse(RecipePanel.canSubstitute(IngredientStatus.BASIC));
+    }
+
+    @Test
+    void recipeMetaLine() {
+        com.recipeagent.model.Recipe r = new com.recipeagent.model.Recipe("Soup",
+                List.of(new com.recipeagent.model.Ingredient("leek", 1, "")), List.of("Boil"), 25, 1);
+        assertEquals("25 min · 1 portion", RecipePanel.meta(r));
+        r.recordCooked(LocalDate.of(2026, 11, 1));
+        assertEquals("25 min · 1 portion · Cooked once", RecipePanel.meta(r));
+        r.recordCooked(LocalDate.of(2026, 11, 2));
+        assertEquals("25 min · 1 portion · Cooked 2 times", RecipePanel.meta(r));
+    }
+
+    @Test
+    void recipeMessages() {
+        assertEquals("Thinking of a recipe…", RecipePanel.loadingText(List.of()));
+        assertEquals("Finding a recipe that uses milk, spinach…", RecipePanel.loadingText(List.of("milk", "spinach")));
+        assertEquals("You're missing 1 ingredient", RecipePanel.missingTitle(1));
+        assertEquals("You're missing 3 ingredients", RecipePanel.missingTitle(3));
+        assertEquals("Marked as cooked and taken out of your pantry. Click Undo if this was a mistake.",
+                RecipePanel.cookedMessage(List.of()));
+        assertTrue(RecipePanel.cookedMessage(List.of("basil", "mint")).contains("skipped: basil, mint."));
+    }
+
+    @Test
+    void missingDialogRowsSayWhy() {
+        List<com.recipeagent.model.Ingredient> recipe = List.of(
+                new com.recipeagent.model.Ingredient("Eggs", 3, ""),
+                new com.recipeagent.model.Ingredient("soy sauce", 2, "tbsp"));
+        java.util.Map<String, IngredientStatus> byName = RecipePanel.statusByName(recipe,
+                List.of(IngredientStatus.NOT_ENOUGH, IngredientStatus.MISSING));
+        List<String[]> rows = RecipePanel.missingRows(List.of(
+                new com.recipeagent.model.Ingredient("eggs", 1, ""),
+                new com.recipeagent.model.Ingredient("soy sauce", 2, "tbsp")), byName);
+        assertArrayEquals(new String[]{"eggs", "1", "Not enough in pantry"}, rows.get(0));
+        assertArrayEquals(new String[]{"soy sauce", "2 tbsp", "Not in pantry"}, rows.get(1));
+    }
+
+    @Test
+    void substituteDialogPicksOneFromThePantryFirst() {
+        com.recipeagent.model.Substitution a = new com.recipeagent.model.Substitution("yogurt", "", false);
+        com.recipeagent.model.Substitution b = new com.recipeagent.model.Substitution("milk + lemon", "", true);
+        assertEquals(1, RecipePanel.defaultChoice(List.of(a, b)));
+        assertEquals(0, RecipePanel.defaultChoice(List.of(a)));
+    }
+
+    @Test
+    void cancelledBackgroundTaskIgnoresTheResult() throws Exception {
+        java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch idle = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.atomic.AtomicBoolean gotResult = new java.util.concurrent.atomic.AtomicBoolean();
+        Background.Task[] task = new Background.Task[1];
+        javax.swing.SwingUtilities.invokeAndWait(() -> task[0] = Background.run(
+                busy -> {
+                    if (!busy) {
+                        idle.countDown();
+                    }
+                },
+                () -> {
+                    try {
+                        release.await();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                    return "late answer";
+                },
+                r -> gotResult.set(true),
+                ex -> gotResult.set(true)));
+        javax.swing.SwingUtilities.invokeAndWait(() -> task[0].cancel());
+        assertTrue(idle.await(5, java.util.concurrent.TimeUnit.SECONDS));   // no longer busy
+        assertTrue(task[0].isCancelled());
+        release.countDown();
+        Thread.sleep(200);
+        javax.swing.SwingUtilities.invokeAndWait(() -> { });
+        assertFalse(gotResult.get());
     }
 
     private static String message(Runnable r) {

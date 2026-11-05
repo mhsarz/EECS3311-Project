@@ -66,8 +66,12 @@ dependency) and falls back to the system look if FlatLaf is missing. Tabs:
   "1 day · Use soon" (yellow, within 3 days) or "Expired · 2 days" (red). The Add item form has a unit
   list, a best-before date (a week ahead by default, or "No date") and shows mistakes inline.
 - **Recipe**: generate a recipe with the AI (time limit, portions, optional "allow ingredients I don't
-  have"), substitute a missing ingredient, check what is missing and add it to the cart, mark as
-  cooked (takes the amounts out of the pantry), undo, and save to history.
+  have"); Cancel while it is thinking. The recipe card shows "Uses N expiring items", "3 in pantry ·
+  2 missing" and a chip for each ingredient (In pantry, Use soon, Expired, Not enough, Missing, Basic).
+  **Substitute** asks the AI for replacements and "Use substitute" puts one into the recipe. **Cook This**
+  lists what is missing and can add it to the cart; **Mark as Cooked** takes the amounts out of the
+  pantry (with **Undo**); **Save to History**. If the AI is unavailable the page says why and offers
+  Try Again or Open History.
 - **History**: saved recipes with 1-5 star ratings, favourites and search. Top-rated recipes are used
   as favourites when a new recipe is generated.
 
@@ -115,7 +119,7 @@ src/main/java/com/recipeagent/
   prompt/              Prompt, PromptBuilder, ClaudePromptBuilder, PlainPromptBuilder (Builder)
   controller/AgentController  the Facade used by the GUI and CLI; saves every change
   gui/                 MainWindow, HeaderBar, TabBar, PageHeader, ChatPanel, AlertsStrip, StatusFooter,
-                       Theme (colours, buttons), PantryPanel, RecipePanel, HistoryPanel, table models,
+                       Theme (colours, buttons), Chip, PantryPanel, RecipePanel, HistoryPanel, table models,
                        InputParser, Background (runs AI calls off the UI thread)
 src/test/java/...      JUnit 5 tests
 UMLs/                  class, use-case and sequence diagrams (UMLet .uxf + .svg)

@@ -50,7 +50,7 @@ public class MainWindow implements NotificationListener {
         Runnable refresh = this::refreshAll;
         this.header = new HeaderBar(controller.today());
         this.pantryPanel = new PantryPanel(controller);
-        this.recipePanel = new RecipePanel(controller, refresh);
+        this.recipePanel = new RecipePanel(controller, refresh, tabBar::select);
         this.historyPanel = new HistoryPanel(controller, refresh,
                 r -> {
                     recipePanel.showRecipe(r);

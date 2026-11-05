@@ -7,12 +7,14 @@ import com.recipeagent.llm.LLMResponse;
 import com.recipeagent.llm.LLMUnavailableException;
 import com.recipeagent.model.CartItem;
 import com.recipeagent.model.Ingredient;
+import com.recipeagent.model.IngredientStatus;
 import com.recipeagent.model.Notification;
 import com.recipeagent.model.NotificationType;
 import com.recipeagent.model.PantryItem;
 import com.recipeagent.model.Recipe;
 import com.recipeagent.model.RecipeRequest;
 import com.recipeagent.model.StorageLocation;
+import com.recipeagent.model.Substitution;
 import com.recipeagent.notify.NotificationListener;
 import com.recipeagent.storage.JsonStorage;
 import org.junit.jupiter.api.Test;
@@ -272,5 +274,76 @@ class AgentControllerTest {
         AgentController c = controller(llm);
         c.startProfileSetup();
         assertEquals("halal", controller(null).getProfile().getDiet());
+    }
+
+    // ------------------------------------------------------------ ingredient status + substitute
+
+    @Test
+    void ingredientStatusesMatchThePantry() {
+        AgentController c = controller(null);
+        c.addPantryItem(item("rice", 3, null), false);
+        c.addPantryItem(item("milk", 1, TODAY.plusDays(2)), false);
+        c.addPantryItem(item("yogurt", 1, TODAY.minusDays(1)), false);
+        c.addPantryItem(item("eggs", 1, null), false);
+        Recipe r = new Recipe("Bowl", List.of(new Ingredient("rice", 1, "cup"), new Ingredient("Milk", 1, "cup"),
+                new Ingredient("yogurt", 1, ""), new Ingredient("eggs", 2, ""), new Ingredient("soy sauce", 1, "tbsp"),
+                new Ingredient("salt", 0, "")), List.of("Cook"), 20, 2);
+
+        assertEquals(List.of(IngredientStatus.IN_PANTRY, IngredientStatus.USE_SOON, IngredientStatus.EXPIRED,
+                IngredientStatus.NOT_ENOUGH, IngredientStatus.MISSING, IngredientStatus.BASIC),
+                c.getIngredientStatuses(r));
+    }
+
+    @Test
+    void ingredientsThatNeedBuyingAreExactlyTheMissingOnes() {
+        AgentController c = controller(null);
+        c.addPantryItem(item("eggs", 1, TODAY.minusDays(3)), false);    // expired and not enough
+        c.addPantryItem(item("salt", 1, null), false);
+        c.addPantryItem(item("flour", 5, null), false);
+        Recipe r = new Recipe("Crepes", List.of(new Ingredient("eggs", 2, ""), new Ingredient("salt", 3, "tsp"),
+                new Ingredient("flour", 1, "cup"), new Ingredient("milk", 1, "cup")), List.of("Mix"), 20, 2);
+
+        List<IngredientStatus> statuses = c.getIngredientStatuses(r);
+        List<String> needBuying = new ArrayList<>();
+        for (int i = 0; i < statuses.size(); i++) {
+            if (statuses.get(i).needsBuying()) {
+                needBuying.add(r.getIngredients().get(i).getName());
+            }
+        }
+        assertEquals(c.checkIngredients(r).getMissingNames(), needBuying);
+        assertEquals(List.of("eggs", "milk"), needBuying);
+        assertEquals(IngredientStatus.IN_PANTRY, statuses.get(1));       // a basic never counts as short
+    }
+
+    @Test
+    void useSubstituteChangesTheRecipeAndSavesItIfInHistory() {
+        AgentController c = controller(null);
+        Recipe r = new Recipe("Pancakes", List.of(new Ingredient("buttermilk", 1, "cup")),
+                List.of("Whisk the buttermilk"), 15, 2);
+        c.saveRecipe(r);
+        assertTrue(c.useSubstitute(r, "buttermilk", new Substitution("milk with lemon", "", false)));
+        assertFalse(c.useSubstitute(r, "cream", new Substitution("milk", "", false)));
+
+        Recipe saved = controller(null).findRecipe(r.getId()).orElseThrow();
+        assertEquals("milk with lemon", saved.getIngredients().get(0).getName());
+        assertEquals("Whisk the milk with lemon", saved.getSteps().get(0));
+    }
+
+    @Test
+    void substituteMadeFromPantryItemsCountsAsInThePantry() {
+        AgentController c = controller(null);
+        c.addPantryItem(item("milk", 1, TODAY.plusDays(1)), false);
+        c.addPantryItem(item("lemon", 2, null), false);
+        Recipe r = new Recipe("Pancakes", List.of(new Ingredient("buttermilk", 1, "cup"),
+                new Ingredient("cream", 1, "cup")), List.of("Mix"), 15, 2);
+        c.useSubstitute(r, "buttermilk", new Substitution("milk with lemon", "", true, List.of("milk", "lemon")));
+        c.useSubstitute(r, "cream", new Substitution("coconut cream", "", false, List.of("coconut milk")));
+
+        assertEquals(List.of(IngredientStatus.USE_SOON, IngredientStatus.MISSING), c.getIngredientStatuses(r));
+        assertEquals(List.of("coconut cream"), c.checkIngredients(r).getMissingNames());
+
+        c.removePantryItemByName("lemon");                              // a part is gone: now missing
+        assertEquals(IngredientStatus.MISSING, c.getIngredientStatuses(r).get(0));
+        assertEquals(List.of("milk with lemon", "coconut cream"), c.checkIngredients(r).getMissingNames());
     }
 }

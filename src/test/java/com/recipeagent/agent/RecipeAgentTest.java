@@ -231,6 +231,8 @@ class RecipeAgentTest {
         assertTrue(subs.get(0).isInStock());
         assertFalse(subs.get(1).isInStock());   // LLM named "yogurt", which is not in the pantry
         assertFalse(subs.get(2).isInStock());
+        assertEquals(List.of("milk", "lemon"), subs.get(0).getPantryItems());
+        assertEquals(List.of(), subs.get(2).getPantryItems());
         String p = llm.prompts.get(0);
         assertTrue(p.contains("missing \"buttermilk\""));
         assertTrue(p.contains("1. Mix"));

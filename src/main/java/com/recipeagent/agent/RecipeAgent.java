@@ -334,7 +334,7 @@ public class RecipeAgent {
                     inStock = false;
                 }
             }
-            result.add(new Substitution(name, note, inStock));
+            result.add(new Substitution(name, note, inStock, uses));
         }
         return result;
     }

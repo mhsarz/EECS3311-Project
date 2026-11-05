@@ -15,7 +15,9 @@ import com.recipeagent.llm.ClaudeClient;
 import com.recipeagent.llm.LLMClient;
 import com.recipeagent.llm.LLMClientProxy;
 import com.recipeagent.model.CartItem;
+import com.recipeagent.model.Ingredient;
 import com.recipeagent.model.IngredientCheck;
+import com.recipeagent.model.IngredientStatus;
 import com.recipeagent.model.Notification;
 import com.recipeagent.model.PantryItem;
 import com.recipeagent.model.Recipe;
@@ -216,17 +218,102 @@ public class AgentController {
 
     /**
      * Lists the recipe's missing ingredients (F11). Basics such as salt and water are not
-     * counted (see RecipeAgent.BASIC_STAPLES). Currently compares names exactly; AI name
+     * counted (see RecipeAgent.BASIC_STAPLES), nor a substitute whose pantry items are all
+     * at home (F07). Currently compares names exactly; AI name
      * matching (e.g. "scallions" = "green onions") is added with the flyers work.
      */
     public IngredientCheck checkIngredients(Recipe recipe) {
         IngredientCheck check = pantry.checkRecipe(recipe);
         for (String name : check.getMissingNames()) {
-            if (RecipeAgent.isBasicStaple(name)) {
+            List<String> parts = recipe.getSubstituteParts(name);
+            boolean substituteAtHome = !parts.isEmpty() && pantry.findByName(name).isEmpty()
+                    && substituteInPantry(parts);
+            if (RecipeAgent.isBasicStaple(name) || substituteAtHome) {
                 check.markFound(name);
             }
         }
         return check;
+    }
+
+    /**
+     * The pantry status of each ingredient, in recipe order (F01, F11): in the pantry, use
+     * soon, expired, not enough, missing, or a basic such as salt. The ones that "need buying"
+     * are exactly the ones {@link #checkIngredients(Recipe)} lists as missing.
+     */
+    public List<IngredientStatus> getIngredientStatuses(Recipe recipe) {
+        if (recipe == null) {
+            throw new IllegalArgumentException("Recipe must not be null");
+        }
+        LocalDate today = today();
+        List<IngredientStatus> result = new ArrayList<>();
+        for (Ingredient ing : recipe.getIngredients()) {
+            List<String> parts = recipe.getSubstituteParts(ing.getName());
+            if (!parts.isEmpty() && pantry.findByName(ing.getName()).isEmpty()) {
+                result.add(substituteStatus(parts, today));
+                continue;
+            }
+            List<PantryItem> found = pantry.findByName(ing.getName());
+            boolean basic = RecipeAgent.isBasicStaple(ing.getName());
+            if (found.isEmpty()) {
+                result.add(basic ? IngredientStatus.BASIC : IngredientStatus.MISSING);
+                continue;
+            }
+            PantryItem item = found.get(0);
+            if (!basic && item.getQuantity() < ing.getQuantity()) {
+                result.add(IngredientStatus.NOT_ENOUGH);       // same rule as checkIngredients
+            } else if (item.hasBestBefore() && item.daysUntilExpiry(today) < 0) {
+                result.add(IngredientStatus.EXPIRED);
+            } else if (item.isExpiringWithin(EXPIRY_DAYS, today)) {
+                result.add(IngredientStatus.USE_SOON);
+            } else {
+                result.add(IngredientStatus.IN_PANTRY);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Status of a substitute made from pantry items: missing if one of them is gone, else
+     * the most urgent date among them. Amounts are not compared (the agent gives no amounts).
+     */
+    private IngredientStatus substituteStatus(List<String> parts, LocalDate today) {
+        IngredientStatus status = IngredientStatus.IN_PANTRY;
+        for (String part : parts) {
+            List<PantryItem> found = pantry.findByName(part);
+            if (found.isEmpty()) {
+                return IngredientStatus.MISSING;
+            }
+            PantryItem item = found.get(0);
+            if (item.hasBestBefore() && item.daysUntilExpiry(today) < 0) {
+                status = IngredientStatus.EXPIRED;
+            } else if (status == IngredientStatus.IN_PANTRY && item.isExpiringWithin(EXPIRY_DAYS, today)) {
+                status = IngredientStatus.USE_SOON;
+            }
+        }
+        return status;
+    }
+
+    /** True if every pantry item a substitute is made from is in the pantry. */
+    private boolean substituteInPantry(List<String> parts) {
+        return parts.stream().allMatch(part -> !pantry.findByName(part).isEmpty());
+    }
+
+    /**
+     * Uses a substitute instead of an ingredient in this recipe (F07 "Use substitute").
+     * If the recipe is in the history, the change is saved there too.
+     *
+     * @return false if the recipe has no such ingredient
+     */
+    public boolean useSubstitute(Recipe recipe, String ingredient, Substitution substitute) {
+        if (recipe == null || substitute == null) {
+            throw new IllegalArgumentException("Recipe and substitute are required");
+        }
+        boolean changed = recipe.replaceIngredient(ingredient, substitute.getSubstitute(),
+                substitute.getPantryItems());
+        if (changed && history.contains(recipe.getId())) {
+            saveHistory();
+        }
+        return changed;
     }
 
     /**
