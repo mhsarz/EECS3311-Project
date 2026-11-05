@@ -1,5 +1,6 @@
 package com.recipeagent;
 
+import com.recipeagent.cli.CLIApp;
 import com.recipeagent.config.AppConfig;
 import com.recipeagent.controller.AgentController;
 import com.recipeagent.gui.MainWindow;
@@ -13,7 +14,8 @@ import java.util.Arrays;
  * Entry point.
  * <pre>
  *   mvn exec:java                       starts the GUI (MainWindow)
- *   mvn exec:java -Dexec.args="cli ..." starts the CLI (CLIApp)
+ *   mvn exec:java -Dexec.args="cli"     starts the interactive CLI (CLIApp)
+ *   mvn exec:java -Dexec.args="cli pantry list"   runs one CLI command
  * </pre>
  * Both interfaces use the same AgentController.
  */
@@ -33,8 +35,10 @@ public final class Main {
         boolean cli = args.length > 0 && args[0].equalsIgnoreCase("cli");
         if (cli) {
             String[] cliArgs = Arrays.copyOfRange(args, 1, args.length);
-            System.out.println("CLI mode requested with args " + Arrays.toString(cliArgs)
-                    + " (CLIApp is added in a later commit).");
+            int code = new CLIApp(controller, System.in, System.out).run(cliArgs);
+            if (code != 0) {
+                System.exit(code);
+            }
             return;
         }
         if (GraphicsEnvironment.isHeadless()) {

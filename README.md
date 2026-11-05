@@ -107,7 +107,7 @@ mvn exec:java
 java -jar target/recipe-agent-0.1.0-jar-with-dependencies.jar
 ```
 
-CLI:
+CLI (interactive: type commands at the `smart-pantry>` prompt, `help` lists them, `exit` quits):
 
 ```
 mvn exec:java -Dexec.args="cli"
@@ -115,11 +115,33 @@ mvn exec:java -Dexec.args="cli"
 java -jar target/recipe-agent-0.1.0-jar-with-dependencies.jar cli
 ```
 
+Or run one command and exit, e.g. `java -jar target/recipe-agent-0.1.0-jar-with-dependencies.jar cli pantry list`
+(with Maven: `mvn exec:java -Dexec.args="cli pantry list"`). Undo and the profile questions need the
+interactive CLI, because they are kept for the session. Alerts are printed as `[ALERT] ...` lines.
+
+| Feature | CLI commands |
+|---|---|
+| F01 Generate recipe | `recipe generate --time 30 --portions 2 [--use milk,spinach] [--allow-missing] [--save]`, `recipe show <id>`, `recipe save` |
+| F02 Cart and sale alerts | `cart add milk --qty 2 [--unit L]`, `cart list`, `cart remove milk`, `cart clear`, `cart sales` |
+| F03 Pantry | `pantry add rice --qty 2 --unit kg --location pantry --expires 2027-03-01`, `pantry list`, `pantry edit rice --qty 3`, `pantry remove rice` |
+| F04 Profile | `profile set --diet vegetarian --allergy peanuts`, `profile show`, `profile setup` (questions from the agent) |
+| F05 Expiry alerts | `pantry expiring`, then `recipe generate --use-expiring` |
+| F06 Mark as cooked, undo | `recipe cooked <id>`, `undo` |
+| F07 Substitutes | `recipe substitute <id> buttermilk [--use 1]` |
+| F08 History | `history list [--favourites]`, `history rate <id> 4`, `history fav <id>`, `history search chicken`, `history remove <id>` |
+| F09 Chat | `chat "What can I make with chicken?"`, or `chat` for a conversation |
+| F10 Flyers | `flyers stores`, `flyers pick "No Frills" Metro`, `flyers refresh`, `flyers upload ./nofrills.txt --store "No Frills"`, `flyers list --store "No Frills"` |
+| F11 Missing ingredients | `recipe check <id> [--add-missing]` |
+
+`<id>` is a recipe id from `history list` (the first 4 or more characters are enough), or `last` for
+the recipe shown last in the session.
+
 ## Project structure
 
 ```
 src/main/java/com/recipeagent/
   Main.java            entry point (GUI by default, "cli" for the CLI)
+  cli/                 CLIApp (all features in a terminal; prints alerts), CommandLine, TextTable
   config/AppConfig     reads .env and environment variables
   model/               domain classes (PantryItem, Recipe, CartItem, Flyer, Notification, ...)
   storage/JsonStorage  saves and loads data as JSON files in DATA_DIR
