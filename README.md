@@ -62,7 +62,9 @@ The GUI follows the "Smart Pantry" design: a header with tabs, the page in the m
 collapsed), the Alerts strip and a status footer. It uses the FlatLaf look and feel (a Maven
 dependency) and falls back to the system look if FlatLaf is missing. Tabs:
 
-- **Pantry**: add, merge and remove items. Items that expire within 3 days are yellow, expired items red.
+- **Pantry**: add, merge and remove items. Each item shows its best-before date and a chip such as
+  "1 day · Use soon" (yellow, within 3 days) or "Expired · 2 days" (red). The Add item form has a unit
+  list, a best-before date (a week ahead by default, or "No date") and shows mistakes inline.
 - **Recipe**: generate a recipe with the AI (time limit, portions, optional "allow ingredients I don't
   have"), substitute a missing ingredient, check what is missing and add it to the cart, mark as
   cooked (takes the amounts out of the pantry), undo, and save to history.

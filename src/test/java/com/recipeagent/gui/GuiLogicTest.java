@@ -51,18 +51,63 @@ class GuiLogicTest {
         PantryTableModel model = new PantryTableModel();
         model.setItems(List.of(
                 new PantryItem("milk", 1, "L", StorageLocation.FRIDGE, today.plusDays(2)),
-                new PantryItem("rice", 2, "kg", StorageLocation.PANTRY, null)), today);
+                new PantryItem("rice", 2, "kg", StorageLocation.PANTRY, null),
+                new PantryItem("yogurt", 1, "", StorageLocation.FRIDGE, today.minusDays(1)),
+                new PantryItem("cheese", 1, "", StorageLocation.FRIDGE, today.plusDays(9))), today);
 
-        assertEquals(2, model.getRowCount());
+        assertEquals(4, model.getRowCount());
         assertEquals(6, model.getColumnCount());
-        assertEquals("Item", model.getColumnName(0));
+        assertEquals("Qty", model.getColumnName(1));
         assertEquals("milk", model.getValueAt(0, 0));
         assertEquals("Fridge", model.getValueAt(0, 3));
-        assertEquals("2026-11-05", model.getValueAt(0, 4));
+        assertEquals(LocalDate.of(2026, 11, 5), model.getValueAt(0, PantryTableModel.BEST_BEFORE_COLUMN));
         assertEquals(2, model.getValueAt(0, PantryTableModel.DAYS_LEFT_COLUMN));
         assertNull(model.getValueAt(1, PantryTableModel.DAYS_LEFT_COLUMN));
-        assertEquals("", model.getValueAt(1, 4));
-        assertEquals("rice", model.getItemAt(1).getName());
+        assertNull(model.getValueAt(1, PantryTableModel.BEST_BEFORE_COLUMN));
+        assertEquals(LocalDate.class, model.getColumnClass(PantryTableModel.BEST_BEFORE_COLUMN));
+
+        assertEquals(PantryTableModel.Status.USE_SOON, model.getStatusAt(0));
+        assertEquals(PantryTableModel.Status.NO_DATE, model.getStatusAt(1));
+        assertEquals(PantryTableModel.Status.EXPIRED, model.getStatusAt(2));
+        assertEquals(PantryTableModel.Status.FRESH, model.getStatusAt(3));
+    }
+
+    @Test
+    void daysLeftChipsReadLikeTheDesign() {
+        assertEquals("1 day · Use soon", PantryTableModel.daysLabel(1));
+        assertEquals("3 days · Use soon", PantryTableModel.daysLabel(3));
+        assertEquals("Today · Use soon", PantryTableModel.daysLabel(0));
+        assertEquals("Expired · 2 days", PantryTableModel.daysLabel(-2));
+        assertEquals("Expired · 1 day", PantryTableModel.daysLabel(-1));
+        assertEquals("7 days", PantryTableModel.daysLabel(7));
+        assertEquals("", PantryTableModel.daysLabel(null));
+        assertEquals("Nov 4, 2026", PantryTableModel.formatDate(LocalDate.of(2026, 11, 4)));
+        assertEquals("", PantryTableModel.formatDate(null));
+    }
+
+    @Test
+    void addFormShowsOneClearMessage() {
+        PantryPanel.FormCheck both = PantryPanel.checkForm(" ", "0");
+        assertTrue(both.nameBad());
+        assertTrue(both.qtyBad());
+        assertEquals("Enter an item name and a quantity greater than 0.", both.message());
+        assertEquals("Enter an item name.", PantryPanel.checkForm("", "2").message());
+        assertEquals("Enter a quantity greater than 0, like 2 or 1.5.", PantryPanel.checkForm("milk", "abc").message());
+        PantryPanel.FormCheck ok = PantryPanel.checkForm("milk", "1,5");
+        assertNull(ok.message());
+        assertFalse(ok.nameBad() || ok.qtyBad());
+    }
+
+    @Test
+    void mergeDialogShowsTheNewTotal() {
+        PantryItem inPantry = new PantryItem("milk", 1, "L", StorageLocation.FRIDGE, null);
+        PantryItem adding = new PantryItem("Milk", 1.5, "L", StorageLocation.FRIDGE, null);
+        assertArrayEquals(new String[]{"In pantry: 1 L", "Adding: 1.5 L", "Total: 2.5 L"},
+                PantryPanel.mergeSummary(inPantry, adding));
+        assertNull(PantryPanel.unitWarning(inPantry, adding));
+        PantryItem inMl = new PantryItem("milk", 250, "ml", StorageLocation.FRIDGE, null);
+        assertEquals("Units differ (L vs ml). The amounts are added as numbers, in L.",
+                PantryPanel.unitWarning(inPantry, inMl));
     }
 
     @Test
