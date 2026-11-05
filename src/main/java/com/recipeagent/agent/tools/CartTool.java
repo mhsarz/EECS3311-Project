@@ -6,6 +6,7 @@ import com.recipeagent.agent.AgentTool;
 import com.recipeagent.agent.ToolArgs;
 import com.recipeagent.cart.ShoppingCart;
 import com.recipeagent.model.CartItem;
+import com.recipeagent.model.CartSource;
 
 /**
  * Lets the agent read and change the shopping cart from the chat (F09), e.g.
@@ -13,8 +14,9 @@ import com.recipeagent.model.CartItem;
  * <p>
  * Actions (JSON args):
  * <ul>
- *   <li>{"action":"list"}: every item with quantity and whether it is on sale</li>
- *   <li>{"action":"add","name":"eggs","quantity":12}: adds the item (quantity defaults to 1)</li>
+ *   <li>{"action":"list"}: every item with quantity, unit and whether it is on sale</li>
+ *   <li>{"action":"add","name":"milk","quantity":2,"unit":"L"}: adds the item (quantity
+ *       defaults to 1, unit is optional); it is shown as "added from Chat"</li>
  *   <li>{"action":"remove","name":"eggs"}: removes the item</li>
  * </ul>
  */
@@ -39,7 +41,8 @@ public class CartTool implements AgentTool {
     @Override
     public String getDescription() {
         return "Read or change the user's shopping cart. Use action 'list' to see it, 'add' with "
-                + "'name' and optional 'quantity' to add an item, or 'remove' with 'name'. "
+                + "'name', optional 'quantity' and optional 'unit' (e.g. L, g, pack) to add an item, or "
+                + "'remove' with 'name'. "
                 + "Only add or remove items when the user asks.";
     }
 
@@ -48,7 +51,8 @@ public class CartTool implements AgentTool {
         return "{\"type\":\"object\",\"properties\":{"
                 + "\"action\":{\"type\":\"string\",\"enum\":[\"list\",\"add\",\"remove\"]},"
                 + "\"name\":{\"type\":\"string\"},"
-                + "\"quantity\":{\"type\":\"number\",\"exclusiveMinimum\":0}},"
+                + "\"quantity\":{\"type\":\"number\",\"exclusiveMinimum\":0},"
+                + "\"unit\":{\"type\":\"string\"}},"
                 + "\"required\":[\"action\"]}";
     }
 
@@ -67,13 +71,14 @@ public class CartTool implements AgentTool {
                 double qty = a.getDouble("quantity", 1);
                 CartItem added;
                 try {
-                    added = cart.add(new CartItem(name, qty));
+                    added = cart.add(new CartItem(name, qty, a.getString("unit", ""), CartSource.CHAT));
                 } catch (IllegalArgumentException e) {
                     return PantryTool.error(e.getMessage());
                 }
                 JsonObject o = new JsonObject();
                 o.addProperty("added", added.getName());
                 o.addProperty("quantity_in_cart", added.getQuantity());
+                o.addProperty("unit", added.getUnit());
                 return o.toString();
             }
             case "remove": {
@@ -97,6 +102,7 @@ public class CartTool implements AgentTool {
             JsonObject o = new JsonObject();
             o.addProperty("name", i.getName());
             o.addProperty("quantity", i.getQuantity());
+            o.addProperty("unit", i.getUnit());
             o.addProperty("on_sale", i.isOnSale());
             arr.add(o);
         }

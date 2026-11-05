@@ -29,6 +29,7 @@ public class MainWindow implements NotificationListener {
     static final int DAY_MILLIS = 24 * 60 * 60 * 1000;
     static final String PANTRY = "Pantry";
     static final String RECIPE = "Recipe";
+    static final String CART = "Cart";
     static final String HISTORY = "History";
 
     private final AgentController controller;
@@ -41,6 +42,7 @@ public class MainWindow implements NotificationListener {
     private final StatusFooter footer = new StatusFooter();
     private final PantryPanel pantryPanel;
     private final RecipePanel recipePanel;
+    private final CartPanel cartPanel;
     private final HistoryPanel historyPanel;
     private final ChatPanel chatPanel;
     private Timer dailyCheck;
@@ -51,6 +53,7 @@ public class MainWindow implements NotificationListener {
         this.header = new HeaderBar(controller.today());
         this.pantryPanel = new PantryPanel(controller);
         this.recipePanel = new RecipePanel(controller, refresh, tabBar::select);
+        this.cartPanel = new CartPanel(controller, refresh);
         this.historyPanel = new HistoryPanel(controller, refresh,
                 r -> {
                     recipePanel.showRecipe(r);
@@ -62,6 +65,7 @@ public class MainWindow implements NotificationListener {
 
         addPage(PANTRY, pantryPanel);
         addPage(RECIPE, recipePanel);
+        addPage(CART, cartPanel);
         addPage(HISTORY, historyPanel);
         tabBar.onSelect(name -> {
             pages.show(pageArea, name);
@@ -127,6 +131,7 @@ public class MainWindow implements NotificationListener {
     void refreshAll() {
         pantryPanel.refresh();
         recipePanel.refresh();
+        cartPanel.refresh();
         historyPanel.refresh();
         footer.setAiStatus(controller.getAiStatus(), controller.isAiAvailable());
     }

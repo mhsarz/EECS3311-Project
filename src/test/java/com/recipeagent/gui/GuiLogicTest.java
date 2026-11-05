@@ -135,19 +135,97 @@ class GuiLogicTest {
                 List.of(new com.recipeagent.model.Ingredient("bread", 1, "")), List.of("Toast"), 5, 1);
 
         HistoryTableModel m = new HistoryTableModel();
-        m.setRecipes(List.of(r, plain));
-        assertEquals("★★★★☆", m.getValueAt(0, 1));
-        assertEquals("♥", m.getValueAt(0, 2));
-        assertEquals(1, m.getValueAt(0, 3));
-        assertEquals("2026-11-01", m.getValueAt(0, 4));
-        assertEquals(30, m.getValueAt(0, 5));
-        assertEquals("not rated", m.getValueAt(1, 1));
-        assertEquals("", m.getValueAt(1, 2));
-        assertEquals("never", m.getValueAt(1, 4));
+        m.setRecipes(List.of(plain, r));                                  // cooked recipe comes first
+        assertEquals("Curry", m.getValueAt(0, HistoryTableModel.TITLE_COLUMN));
+        assertEquals(Boolean.TRUE, m.getValueAt(0, HistoryTableModel.FAV_COLUMN));
+        assertEquals(4, ((Integer) m.getValueAt(0, HistoryTableModel.RATING_COLUMN)).intValue());
+        assertEquals(1, ((Integer) m.getValueAt(0, HistoryTableModel.COOKED_COLUMN)).intValue());
+        assertEquals(LocalDate.of(2026, 11, 1), m.getValueAt(0, HistoryTableModel.LAST_COOKED_COLUMN));
+        assertEquals(30, ((Integer) m.getValueAt(0, HistoryTableModel.TIME_COLUMN)).intValue());
+        assertEquals(Boolean.FALSE, m.getValueAt(1, HistoryTableModel.FAV_COLUMN));
+        assertEquals(0, ((Integer) m.getValueAt(1, HistoryTableModel.RATING_COLUMN)).intValue());
+        assertNull(m.getValueAt(1, HistoryTableModel.LAST_COOKED_COLUMN));
+        assertEquals(LocalDate.class, m.getColumnClass(HistoryTableModel.LAST_COOKED_COLUMN));
+        assertEquals(Boolean.class, m.getColumnClass(HistoryTableModel.FAV_COLUMN));
+        assertEquals("Never", HistoryTableModel.lastCooked(null));
+        assertEquals("Nov 1, 2026", HistoryTableModel.lastCooked(LocalDate.of(2026, 11, 1)));
+    }
 
-        m.setFancySymbols(false);                    // for fonts without star/heart symbols
-        assertEquals("4/5", m.getValueAt(0, 1));
-        assertEquals("yes", m.getValueAt(0, 2));
+    @Test
+    void historyIsMostRecentlyCookedFirstThenNewestSaved() {
+        com.recipeagent.model.Recipe a = recipe("A");
+        com.recipeagent.model.Recipe b = recipe("B");
+        com.recipeagent.model.Recipe c = recipe("C");
+        com.recipeagent.model.Recipe d = recipe("D");
+        b.recordCooked(LocalDate.of(2026, 10, 1));
+        d.recordCooked(LocalDate.of(2026, 11, 2));
+        List<String> titles = HistoryTableModel.recentFirst(List.of(a, b, c, d)).stream()
+                .map(com.recipeagent.model.Recipe::getTitle).toList();
+        assertEquals(List.of("D", "B", "C", "A"), titles);   // saved order is A, B, C, D
+    }
+
+    @Test
+    void historyFooterTotals() {
+        com.recipeagent.model.Recipe a = recipe("A");
+        com.recipeagent.model.Recipe b = recipe("B");
+        a.setRating(5);
+        b.setRating(4);
+        a.setFavourite(true);
+        a.recordCooked(LocalDate.of(2026, 11, 1));
+        a.recordCooked(LocalDate.of(2026, 11, 3));
+        assertEquals("2 recipes · 1 favourite · cooked 2 times · average rating 4.5",
+                HistoryTableModel.stats(List.of(a, b)));
+        assertEquals("3 recipes · 1 favourite · cooked 2 times · average rating 4.5",   // unrated not averaged
+                HistoryTableModel.stats(List.of(a, b, recipe("C"))));
+        assertEquals("1 recipe · 0 favourites · cooked 0 times", HistoryTableModel.stats(List.of(recipe("X"))));
+        assertEquals("0 recipes · 0 favourites · cooked 0 times", HistoryTableModel.stats(List.of()));
+    }
+
+    @Test
+    void historyStarsAndEmptyStates() {
+        assertEquals(0, HistoryPanel.starAt(5));                         // left padding
+        assertEquals(1, HistoryPanel.starAt(HistoryPanel.STAR_LEFT));
+        assertEquals(1, HistoryPanel.starAt(HistoryPanel.STAR_LEFT + HistoryPanel.STAR_SIZE));
+        assertEquals(0, HistoryPanel.starAt(HistoryPanel.STAR_LEFT + HistoryPanel.STAR_SIZE + 2));   // the gap
+        assertEquals(3, HistoryPanel.starAt(HistoryPanel.STAR_LEFT + 2 * HistoryPanel.STAR_STEP + 5));
+        assertEquals(5, HistoryPanel.starAt(HistoryPanel.STAR_LEFT + 4 * HistoryPanel.STAR_STEP));
+        assertEquals(0, HistoryPanel.starAt(HistoryPanel.STAR_LEFT + 5 * HistoryPanel.STAR_STEP));
+
+        assertEquals("No saved recipes yet", HistoryPanel.emptyTitle(true, "", false));
+        assertEquals("No recipes match \"tofu\"", HistoryPanel.emptyTitle(false, " tofu ", false));
+        assertEquals("No recipes match \"tofu\" in your favourites", HistoryPanel.emptyTitle(false, "tofu", true));
+        assertEquals("No favourites yet", HistoryPanel.emptyTitle(false, "", true));
+    }
+
+    @Test
+    void cartTableAndMessages() {
+        com.recipeagent.model.CartItem milk = new com.recipeagent.model.CartItem("milk", 2, "L",
+                com.recipeagent.model.CartSource.CHAT);
+        com.recipeagent.model.CartItem eggs = new com.recipeagent.model.CartItem("eggs", 12);
+        eggs.setOnSale(true);
+        CartTableModel m = new CartTableModel();
+        m.setItems(List.of(milk, eggs));
+        assertEquals(2, m.getRowCount());
+        assertEquals("milk", m.getValueAt(0, 0));
+        assertEquals("L", m.getValueAt(0, 2));
+        assertEquals(com.recipeagent.model.CartSource.CHAT, m.getValueAt(0, CartTableModel.SOURCE_COLUMN));
+        assertEquals(com.recipeagent.model.CartSource.MANUAL, m.getValueAt(1, CartTableModel.SOURCE_COLUMN));
+        assertEquals(Boolean.TRUE, m.getValueAt(1, CartTableModel.SALE_COLUMN));
+        assertEquals("2 items · 1 on sale", CartTableModel.summary(List.of(milk, eggs)));
+        assertEquals("1 item", CartTableModel.summary(List.of(milk)));
+        assertEquals("2 L", CartTableModel.amount(milk));
+        assertEquals("12", CartTableModel.amount(eggs));
+        assertEquals("Added milk.", CartPanel.addedMessage(milk, false));
+        assertEquals("milk was already in your cart; it now has 2 L.", CartPanel.addedMessage(milk, true));
+        assertEquals("", CartPanel.UNITS[0]);                            // no unit by default
+        assertEquals("pcs", CartPanel.UNITS[1]);
+        m.setItems(null);
+        assertEquals(0, m.getRowCount());
+    }
+
+    private static com.recipeagent.model.Recipe recipe(String title) {
+        return new com.recipeagent.model.Recipe(title,
+                List.of(new com.recipeagent.model.Ingredient("rice", 1, "")), List.of("Cook"), 10, 1);
     }
 
     @Test

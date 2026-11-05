@@ -81,4 +81,30 @@ class ShoppingCartTest {
         cart.clear();
         assertTrue(cart.isEmpty());
     }
+
+    @Test
+    void updateChangesQuantityAndUnit() {
+        ShoppingCart cart = new ShoppingCart();
+        cart.add(new CartItem("Milk", 1));
+        CartItem changed = cart.update("milk", 2.5, "L");
+        assertEquals(2.5, changed.getQuantity());
+        assertEquals("L", changed.getUnit());
+        assertThrows(IllegalArgumentException.class, () -> cart.update("milk", 0, "L"));
+        IllegalArgumentException missing = assertThrows(IllegalArgumentException.class,
+                () -> cart.update("bread", 1, ""));
+        assertEquals("bread is not in your cart.", missing.getMessage());
+    }
+
+    @Test
+    void mergingKeepsTheFirstSourceAndFillsAMissingUnit() {
+        ShoppingCart cart = new ShoppingCart();
+        cart.add(new CartItem("soy sauce", 1));
+        CartItem merged = cart.add(new CartItem("Soy sauce", 2, "tbsp", com.recipeagent.model.CartSource.RECIPE));
+        assertEquals(3, merged.getQuantity());
+        assertEquals("tbsp", merged.getUnit());
+        assertEquals(com.recipeagent.model.CartSource.MANUAL, merged.getSource());
+        cart.add(new CartItem("soy sauce", 1, "bottle", com.recipeagent.model.CartSource.CHAT));
+        assertEquals("tbsp", cart.find("soy sauce").orElseThrow().getUnit());      // keeps its unit
+        assertEquals(1, cart.size());
+    }
 }

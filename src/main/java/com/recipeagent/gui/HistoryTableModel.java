@@ -3,28 +3,34 @@ package com.recipeagent.gui;
 import com.recipeagent.model.Recipe;
 
 import javax.swing.table.AbstractTableModel;
+import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 
-/** Table data for the History tab: saved recipes with rating, favourite and cook record. */
+/**
+ * Table data for the History tab (F08): favourite, recipe, rating, times cooked, last cooked
+ * and cooking time. The columns hold booleans, numbers and dates, so clicking a header sorts
+ * them properly; the panel draws the heart and the stars.
+ */
 public class HistoryTableModel extends AbstractTableModel {
 
     private static final long serialVersionUID = 1L;
-    private static final String[] COLUMNS =
-            {"Recipe", "Rating", "Favourite", "Times cooked", "Last cooked", "Time (min)"};
+    static final String[] COLUMNS = {"", "Recipe", "Rating", "Cooked", "Last cooked", "Time"};
+    public static final int FAV_COLUMN = 0;
+    public static final int TITLE_COLUMN = 1;
+    public static final int RATING_COLUMN = 2;
+    public static final int COOKED_COLUMN = 3;
+    public static final int LAST_COOKED_COLUMN = 4;
+    public static final int TIME_COLUMN = 5;
 
-    private final List<Recipe> rows = new ArrayList<>();
-    private boolean fancySymbols = true;
+    private final transient List<Recipe> rows = new ArrayList<>();
 
+    /** Shows the recipes, most recently cooked first (see {@link #recentFirst}). */
     public void setRecipes(List<Recipe> recipes) {
         rows.clear();
-        rows.addAll(recipes);
-        fireTableDataChanged();
-    }
-
-    /** Use plain text instead of star and heart symbols (for fonts that lack them). */
-    public void setFancySymbols(boolean fancy) {
-        this.fancySymbols = fancy;
+        rows.addAll(recentFirst(recipes == null ? List.of() : recipes));
         fireTableDataChanged();
     }
 
@@ -32,15 +38,43 @@ public class HistoryTableModel extends AbstractTableModel {
         return rows.get(row);
     }
 
-    /** "★★★★☆" for 4 stars, "not rated" for 0; plain "4/5" without symbols. */
-    static String stars(int rating, boolean fancy) {
-        if (rating <= 0) {
-            return "not rated";
+    /**
+     * Most recently cooked first; recipes never cooked come after them, newest saved first
+     * (the history keeps recipes in the order they were saved).
+     */
+    static List<Recipe> recentFirst(List<Recipe> recipes) {
+        List<Recipe> cooked = new ArrayList<>();
+        List<Recipe> never = new ArrayList<>();
+        for (Recipe r : recipes) {
+            (r.getLastCooked() == null ? never : cooked).add(r);
         }
-        if (!fancy) {
-            return rating + "/5";
+        cooked.sort(Comparator.comparing(Recipe::getLastCooked).reversed());
+        List<Recipe> result = new ArrayList<>(cooked);
+        for (int i = never.size() - 1; i >= 0; i--) {
+            result.add(never.get(i));
         }
-        return "★".repeat(rating) + "☆".repeat(5 - rating);
+        return result;
+    }
+
+    /** "6 recipes · 2 favourites · cooked 9 times · average rating 4.3" for the footer. */
+    static String stats(List<Recipe> all) {
+        int n = all.size();
+        long favs = all.stream().filter(Recipe::isFavourite).count();
+        int cooks = all.stream().mapToInt(Recipe::getTimesCooked).sum();
+        StringBuilder sb = new StringBuilder()
+                .append(n).append(n == 1 ? " recipe" : " recipes")
+                .append(" · ").append(favs).append(favs == 1 ? " favourite" : " favourites")
+                .append(" · cooked ").append(cooks).append(cooks == 1 ? " time" : " times");
+        double avg = all.stream().filter(Recipe::isRated).mapToInt(Recipe::getRating).average().orElse(0);
+        if (avg > 0) {
+            sb.append(" · average rating ").append(String.format(Locale.ROOT, "%.1f", avg));
+        }
+        return sb.toString();
+    }
+
+    /** "Nov 4, 2026", or "Never". */
+    static String lastCooked(LocalDate d) {
+        return d == null ? "Never" : PantryTableModel.formatDate(d);
     }
 
     @Override
@@ -60,24 +94,35 @@ public class HistoryTableModel extends AbstractTableModel {
 
     @Override
     public Class<?> getColumnClass(int column) {
-        return column == 3 || column == 5 ? Integer.class : String.class;
+        switch (column) {
+            case FAV_COLUMN:
+                return Boolean.class;
+            case RATING_COLUMN:
+            case COOKED_COLUMN:
+            case TIME_COLUMN:
+                return Integer.class;
+            case LAST_COOKED_COLUMN:
+                return LocalDate.class;
+            default:
+                return String.class;
+        }
     }
 
     @Override
     public Object getValueAt(int row, int column) {
         Recipe r = rows.get(row);
         switch (column) {
-            case 0:
+            case FAV_COLUMN:
+                return r.isFavourite();
+            case TITLE_COLUMN:
                 return r.getTitle();
-            case 1:
-                return stars(r.getRating(), fancySymbols);
-            case 2:
-                return r.isFavourite() ? (fancySymbols ? "♥" : "yes") : "";
-            case 3:
+            case RATING_COLUMN:
+                return r.getRating();
+            case COOKED_COLUMN:
                 return r.getTimesCooked();
-            case 4:
-                return r.getLastCooked() == null ? "never" : r.getLastCooked().toString();
-            case 5:
+            case LAST_COOKED_COLUMN:
+                return r.getLastCooked();
+            case TIME_COLUMN:
                 return r.getCookTimeMinutes();
             default:
                 return "";

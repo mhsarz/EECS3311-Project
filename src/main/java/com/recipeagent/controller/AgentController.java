@@ -388,6 +388,19 @@ public class AgentController {
         return removed;
     }
 
+    /** Changes the quantity and unit of a cart item (F02 Edit). */
+    public CartItem updateCartItem(String name, double quantity, String unit) {
+        CartItem item = cart.update(name, quantity, unit);
+        saveCart();
+        return item;
+    }
+
+    /** Empties the cart (F02 "Clear cart"). */
+    public void clearCart() {
+        cart.clear();
+        saveCart();
+    }
+
     public List<CartItem> getCartItems() {
         return cart.getItems();
     }
@@ -401,6 +414,20 @@ public class AgentController {
             saveHistory();
         }
         return saved;
+    }
+
+    /** Removes a recipe from the history (F08). Returns true if it was there. */
+    public boolean removeRecipe(String id) {
+        boolean removed = history.remove(id);
+        if (removed) {
+            saveHistory();
+        }
+        return removed;
+    }
+
+    /** All saved recipes (F08), for the History tab's totals. */
+    public List<Recipe> getHistory() {
+        return history.getAll();
     }
 
     public void rateRecipe(String id, int stars) {

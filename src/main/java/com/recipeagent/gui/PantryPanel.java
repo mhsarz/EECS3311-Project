@@ -543,7 +543,7 @@ public class PantryPanel extends JPanel {
     }
 
     /** Red outline on a field with an error (FlatLaf style, or a red border otherwise). */
-    private static void markError(JTextField field, Border normal, boolean error) {
+    static void markError(JTextField field, Border normal, boolean error) {
         if (flatLafActive()) {
             field.putClientProperty("JComponent.outline", error ? "error" : null);
         } else {

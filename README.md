@@ -73,7 +73,12 @@ dependency) and falls back to the system look if FlatLaf is missing. Tabs:
   lists what is missing and can add it to the cart; **Mark as Cooked** takes the amounts out of the
   pantry (with **Undo**); **Save to History**. If the AI is unavailable the page says why and offers
   Try Again or Open History.
-- **History**: saved recipes with 1-5 star ratings, favourites and search. Top-rated recipes are used
+- **Cart**: your shopping list. Add an item with a quantity and an optional unit, edit it (or
+  double-click), remove it, or clear the cart. Each item shows where it came from: You, Recipe (from
+  Cook This) or Chat (added by the agent). Items on sale this week are marked once flyers are loaded.
+- **History**: saved recipes, most recently cooked first. Click a star to rate (1-5) and the heart to
+  make a favourite (or press 1-5 and F on the selected row); search by name or ingredient, show
+  favourites only, open a recipe or remove it. The footer shows totals. Top-rated recipes are used
   as favourites when a new recipe is generated.
 
 The Alerts panel lists expiry alerts when the app starts (and once a day while it stays open);
@@ -120,7 +125,8 @@ src/main/java/com/recipeagent/
   prompt/              Prompt, PromptBuilder, ClaudePromptBuilder, PlainPromptBuilder (Builder)
   controller/AgentController  the Facade used by the GUI and CLI; saves every change
   gui/                 MainWindow, HeaderBar, TabBar, PageHeader, ChatPanel, AlertsStrip, StatusFooter,
-                       Theme (colours, buttons), Chip, DatePicker, PantryPanel, RecipePanel, HistoryPanel, table models,
+                       Theme (colours, buttons), Chip, DatePicker, PantryPanel, RecipePanel, CartPanel,
+                       HistoryPanel, table models,
                        InputParser, Background (runs AI calls off the UI thread)
 src/test/java/...      JUnit 5 tests
 UMLs/                  class, use-case and sequence diagrams (UMLet .uxf + .svg)

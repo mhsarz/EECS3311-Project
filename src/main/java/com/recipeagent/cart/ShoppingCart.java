@@ -40,7 +40,8 @@ public class ShoppingCart {
     }
 
     /**
-     * Adds an item, or adds its quantity to the existing item with the same name.
+     * Adds an item, or adds its quantity to the existing item with the same name (the
+     * existing item keeps its unit and source; if it has no unit it takes the new one).
      *
      * @return the item now in the cart (the existing one if it was merged)
      */
@@ -55,10 +56,27 @@ public class ShoppingCart {
         for (CartItem existing : items) {
             if (existing.hasName(item.getName())) {
                 existing.addQuantity(item.getQuantity());
+                if (existing.getUnit().isEmpty()) {
+                    existing.setUnit(item.getUnit());
+                }
                 return existing;
             }
         }
         items.add(item);
+        return item;
+    }
+
+    /**
+     * Changes the quantity and unit of the item with this name (the Edit button in the Cart tab).
+     *
+     * @return the changed item
+     * @throws IllegalArgumentException if the item is not in the cart or the quantity is not positive
+     */
+    public CartItem update(String name, double quantity, String unit) {
+        CartItem item = find(name).orElseThrow(
+                () -> new IllegalArgumentException(name + " is not in your cart."));
+        item.setQuantity(quantity);
+        item.setUnit(unit);
         return item;
     }
 

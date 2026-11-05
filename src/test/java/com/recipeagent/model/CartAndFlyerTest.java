@@ -63,4 +63,27 @@ class CartAndFlyerTest {
         assertThrows(IllegalArgumentException.class, () -> flyer.addItem(null));
         assertThrows(IllegalArgumentException.class, () -> new Flyer(" ", TODAY, null));
     }
+
+    @Test
+    void cartItemHasOptionalUnitAndSource() {
+        CartItem plain = new CartItem("bread", 1);
+        assertEquals("", plain.getUnit());
+        assertEquals(CartSource.MANUAL, plain.getSource());
+        assertEquals("bread x1.0", plain.toString());
+        CartItem milk = new CartItem("milk", 2, " L ", CartSource.CHAT);
+        assertEquals("L", milk.getUnit());
+        assertEquals(CartSource.CHAT, milk.getSource());
+        assertEquals("milk 2.0 L", milk.toString());
+        assertEquals(CartSource.MANUAL, new CartItem("x", 1, null, null).getSource());
+        assertEquals("Chat", CartSource.CHAT.getLabel());
+        assertEquals("Recipe", CartSource.RECIPE.getLabel());
+        assertEquals("You", CartSource.MANUAL.getLabel());
+    }
+
+    @Test
+    void cartItemSavedBeforeUnitsLoadsWithDefaults() {
+        CartItem old = new com.google.gson.Gson().fromJson("{\"name\":\"milk\",\"quantity\":2}", CartItem.class);
+        assertEquals("", old.getUnit());
+        assertEquals(CartSource.MANUAL, old.getSource());
+    }
 }

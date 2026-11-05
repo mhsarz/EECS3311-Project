@@ -371,4 +371,23 @@ class AgentControllerTest {
             c.getNotifications().unsubscribe(listener);
         }
     }
+
+    @Test
+    void cartEditClearAndHistoryRemoveAreSaved() {
+        AgentController c = controller(null);
+        c.addToCart(new CartItem("milk", 1));
+        c.addToCart(new CartItem("eggs", 12));
+        c.updateCartItem("Milk", 2, "L");
+        assertEquals("L", controller(null).getCartItems().get(0).getUnit());
+        assertEquals(2, controller(null).getCartItems().get(0).getQuantity());
+        c.clearCart();
+        assertTrue(controller(null).getCartItems().isEmpty());
+
+        Recipe r = new Recipe("Soup", List.of(new Ingredient("leek", 1, "")), List.of("Boil"), 20, 2);
+        c.saveRecipe(r);
+        assertEquals(1, c.getHistory().size());
+        assertTrue(c.removeRecipe(r.getId()));
+        assertFalse(c.removeRecipe(r.getId()));
+        assertTrue(controller(null).getHistory().isEmpty());
+    }
 }

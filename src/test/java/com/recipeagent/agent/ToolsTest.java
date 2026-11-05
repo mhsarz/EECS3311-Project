@@ -130,6 +130,20 @@ class ToolsTest {
     }
 
     @Test
+    void cartToolAddsWithUnitAndMarksItAsFromChat() {
+        com.recipeagent.cart.ShoppingCart cart = new com.recipeagent.cart.ShoppingCart();
+        com.recipeagent.agent.tools.CartTool tool = new com.recipeagent.agent.tools.CartTool(cart);
+        JsonObject added = json(tool.execute("{\"action\":\"add\",\"name\":\"milk\",\"quantity\":2,\"unit\":\"L\"}"));
+        assertEquals("L", added.get("unit").getAsString());
+        com.recipeagent.model.CartItem milk = cart.find("milk").orElseThrow();
+        assertEquals("L", milk.getUnit());
+        assertEquals(com.recipeagent.model.CartSource.CHAT, milk.getSource());
+        JsonObject item = json(tool.execute("list")).getAsJsonArray("items").get(0).getAsJsonObject();
+        assertEquals("L", item.get("unit").getAsString());
+        assertTrue(tool.getInputSchema().contains("\"unit\""));
+    }
+
+    @Test
     void cartToolReportsBadInputAsError() {
         com.recipeagent.agent.tools.CartTool tool =
                 new com.recipeagent.agent.tools.CartTool(new com.recipeagent.cart.ShoppingCart());

@@ -5,6 +5,7 @@ import com.recipeagent.controller.AgentController;
 import com.recipeagent.llm.LLMException;
 import com.recipeagent.llm.LLMUnavailableException;
 import com.recipeagent.model.CartItem;
+import com.recipeagent.model.CartSource;
 import com.recipeagent.model.Ingredient;
 import com.recipeagent.model.IngredientCheck;
 import com.recipeagent.model.IngredientStatus;
@@ -621,7 +622,8 @@ public class RecipePanel extends JPanel {
         List<String> added = new ArrayList<>();
         for (Ingredient i : items) {
             double qty = i.getQuantity() > 0 ? i.getQuantity() : 1;
-            controller.addToCart(new CartItem(i.getName(), qty));
+            controller.addToCart(new CartItem(i.getName(), qty, i.getQuantity() > 0 ? i.getUnit() : "",
+                    CartSource.RECIPE));
             added.add(i.getName());
         }
         dataChanged.run();
