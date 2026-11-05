@@ -22,6 +22,7 @@ import com.recipeagent.model.Notification;
 import com.recipeagent.model.PantryItem;
 import com.recipeagent.model.Recipe;
 import com.recipeagent.model.RecipeRequest;
+import com.recipeagent.model.StorageLocation;
 import com.recipeagent.model.Substitution;
 import com.recipeagent.model.UserProfile;
 import com.recipeagent.notify.NotificationCenter;
@@ -33,6 +34,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -136,6 +138,24 @@ public class AgentController {
             notifications.publish(Notification.expiry(stored, today()));
         }
         return true;
+    }
+
+    /**
+     * Changes a pantry item (F03 Edit). If the new best-before date is within
+     * {@link #EXPIRY_DAYS} days and the date was changed, an expiry alert is sent (F05).
+     *
+     * @throws IllegalArgumentException for invalid values or a name another item already has
+     */
+    public PantryItem updatePantryItem(String id, String name, double quantity, String unit,
+                                       StorageLocation location, LocalDate bestBefore) {
+        LocalDate oldDate = pantry.findById(id).map(PantryItem::getBestBefore).orElse(null);
+        PantryItem updated = pantry.updateItem(id, name, quantity, unit, location, bestBefore);
+        savePantry();
+        boolean dateChanged = !Objects.equals(oldDate, bestBefore);
+        if (dateChanged && updated.isExpiringWithin(EXPIRY_DAYS, today())) {
+            notifications.publish(Notification.expiry(updated, today()));
+        }
+        return updated;
     }
 
     /** Removes a pantry item by id. Returns true if it was there. */

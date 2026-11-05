@@ -58,13 +58,14 @@ mvn test
 ## Run
 
 The GUI follows the "Smart Pantry" design: a header with tabs, the page in the middle, a
-**Chat** panel on the right (ask in plain language, e.g. "Add a dozen eggs to my cart"; it can be
-collapsed), the Alerts strip and a status footer. It uses the FlatLaf look and feel (a Maven
+**Chat** panel on the right (ask in plain language, e.g. "Add a dozen eggs to my cart"; Enter sends,
+Shift+Enter starts a new line; it can be collapsed), the Alerts strip and a status footer. It uses the FlatLaf look and feel (a Maven
 dependency) and falls back to the system look if FlatLaf is missing. Tabs:
 
-- **Pantry**: add, merge and remove items. Each item shows its best-before date and a chip such as
+- **Pantry**: add, edit, merge and remove items. Each item shows its best-before date and a chip such as
   "1 day · Use soon" (yellow, within 3 days) or "Expired · 2 days" (red). The Add item form has a unit
-  list, a best-before date (a week ahead by default, or "No date") and shows mistakes inline.
+  list, a best-before date picker (a calendar that opens on click; a week ahead by default, or "No date")
+  and shows mistakes inline. Select an item and click **Edit** (or double-click it) to change it.
 - **Recipe**: generate a recipe with the AI (time limit, portions, optional "allow ingredients I don't
   have"); Cancel while it is thinking. The recipe card shows "Uses N expiring items", "3 in pantry ·
   2 missing" and a chip for each ingredient (In pantry, Use soon, Expired, Not enough, Missing, Basic).
@@ -119,7 +120,7 @@ src/main/java/com/recipeagent/
   prompt/              Prompt, PromptBuilder, ClaudePromptBuilder, PlainPromptBuilder (Builder)
   controller/AgentController  the Facade used by the GUI and CLI; saves every change
   gui/                 MainWindow, HeaderBar, TabBar, PageHeader, ChatPanel, AlertsStrip, StatusFooter,
-                       Theme (colours, buttons), Chip, PantryPanel, RecipePanel, HistoryPanel, table models,
+                       Theme (colours, buttons), Chip, DatePicker, PantryPanel, RecipePanel, HistoryPanel, table models,
                        InputParser, Background (runs AI calls off the UI thread)
 src/test/java/...      JUnit 5 tests
 UMLs/                  class, use-case and sequence diagrams (UMLet .uxf + .svg)

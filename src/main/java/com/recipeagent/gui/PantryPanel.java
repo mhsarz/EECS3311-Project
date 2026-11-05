@@ -14,11 +14,9 @@ import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
-import javax.swing.JSpinner;
 import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.ListSelectionModel;
-import javax.swing.SpinnerDateModel;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
@@ -39,17 +37,17 @@ import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.awt.RenderingHints;
 import java.awt.Window;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.time.LocalDate;
-import java.time.ZoneId;
-import java.util.Calendar;
-import java.util.Date;
 import java.util.Locale;
 
 /**
  * The Pantry page (F03, F05), as in the Smart Pantry design: the inventory table with
  * "Use soon" / "Expired" chips and a colour legend, an empty state, and an "Add item" form
- * with a unit list, a best-before date (a week from today by default) and inline errors.
- * Adding an item that already exists opens a merge dialog showing the new total.
+ * with a unit list, a best-before date picker (a week from today by default) and inline errors.
+ * Adding an item that already exists opens a merge dialog showing the new total. A selected
+ * item can be changed with Edit (or a double-click) and removed with Remove selected.
  */
 public class PantryPanel extends JPanel {
 
@@ -67,13 +65,14 @@ public class PantryPanel extends JPanel {
     private final JTable table = new JTable(model);
     private final CardLayout cards = new CardLayout();
     private final JPanel tableArea = new JPanel(cards);
+    private final JButton editButton = Theme.secondary("Edit");
     private final JButton removeButton = Theme.secondary("Remove selected");
 
     private final JTextField nameField = new JTextField(16);
     private final JTextField qtyField = new JTextField("1", 4);
     private final JComboBox<String> unitBox = new JComboBox<>(UNITS);
     private final JComboBox<StorageLocation> locationBox = new JComboBox<>(StorageLocation.values());
-    private final JSpinner dateSpinner = new JSpinner(new SpinnerDateModel());
+    private final DatePicker datePicker;
     private final JCheckBox noDate = new JCheckBox("No date");
     private final JLabel errorLabel = Theme.label(" ", Font.PLAIN, 12f, Theme.DANGER_FG);
     private final transient Border nameBorder = nameField.getBorder();
@@ -82,6 +81,7 @@ public class PantryPanel extends JPanel {
     public PantryPanel(AgentController controller) {
         super(new BorderLayout(0, 12));
         this.controller = controller;
+        this.datePicker = new DatePicker(controller.today().plusDays(7), controller::today);
         setBorder(BorderFactory.createEmptyBorder(16, 20, 12, 16));
         add(header, BorderLayout.NORTH);
         add(buildInventory(), BorderLayout.CENTER);
@@ -98,8 +98,14 @@ public class PantryPanel extends JPanel {
         JPanel top = new JPanel(new BorderLayout());
         top.setOpaque(false);
         top.add(Theme.label("Your inventory", Font.BOLD, 13f, Theme.TEXT), BorderLayout.WEST);
+        editButton.setToolTipText("Change the selected item (or double-click it)");
+        editButton.addActionListener(e -> editSelected());
         removeButton.addActionListener(e -> removeSelected());
-        top.add(removeButton, BorderLayout.EAST);
+        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        buttons.setOpaque(false);
+        buttons.add(editButton);
+        buttons.add(removeButton);
+        top.add(buttons, BorderLayout.EAST);
         card.add(top, BorderLayout.NORTH);
 
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
@@ -114,6 +120,14 @@ public class PantryPanel extends JPanel {
         table.setDefaultRenderer(Integer.class, renderer);
         table.setDefaultRenderer(LocalDate.class, renderer);
         table.getSelectionModel().addListSelectionListener(e -> updateButtons());
+        table.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2 && table.rowAtPoint(e.getPoint()) >= 0) {
+                    editSelected();
+                }
+            }
+        });
         JScrollPane sp = new JScrollPane(table);
         sp.setBorder(BorderFactory.createLineBorder(Theme.BORDER));
         sp.getViewport().setBackground(Theme.CARD);
@@ -169,21 +183,10 @@ public class PantryPanel extends JPanel {
         unitBox.setEditable(true);
         unitBox.setSelectedItem("pcs");
         locationBox.setSelectedItem(StorageLocation.FRIDGE);
-        locationBox.setRenderer(new javax.swing.DefaultListCellRenderer() {
-            private static final long serialVersionUID = 1L;
-
-            @Override
-            public Component getListCellRendererComponent(javax.swing.JList<?> list, Object value, int index,
-                                                          boolean selected, boolean focus) {
-                String text = value == null ? "" : capitalize(value.toString());
-                return super.getListCellRendererComponent(list, text, index, selected, focus);
-            }
-        });
-        dateSpinner.setEditor(new JSpinner.DateEditor(dateSpinner, "MMM d, yyyy"));
-        resetDate();
+        locationBox.setRenderer(new LocationRenderer());
         noDate.setOpaque(false);
         noDate.setToolTipText("For food without a best-before date, like salt or rice");
-        noDate.addActionListener(e -> dateSpinner.setEnabled(!noDate.isSelected()));
+        noDate.addActionListener(e -> datePicker.setEnabled(!noDate.isSelected()));
 
         JPanel row = new JPanel(new GridBagLayout());
         row.setOpaque(false);
@@ -192,7 +195,7 @@ public class PantryPanel extends JPanel {
         c.anchor = GridBagConstraints.WEST;
         c.fill = GridBagConstraints.HORIZONTAL;
         String[] labels = {"Name", "Qty", "Unit", "Location", "Best before"};
-        JComponent[] fields = {nameField, qtyField, unitBox, locationBox, datePanel()};
+        JComponent[] fields = {nameField, qtyField, unitBox, locationBox, datePanel(datePicker, noDate)};
         double[] weights = {1.0, 0, 0, 0, 0};
         for (int i = 0; i < labels.length; i++) {
             c.gridx = i;
@@ -216,27 +219,20 @@ public class PantryPanel extends JPanel {
         return card;
     }
 
-    private JPanel datePanel() {
+    private static JPanel datePanel(DatePicker picker, JCheckBox none) {
         JPanel p = new JPanel(new BorderLayout(6, 0));
         p.setOpaque(false);
-        p.add(dateSpinner, BorderLayout.CENTER);
-        p.add(noDate, BorderLayout.EAST);
+        p.add(picker, BorderLayout.CENTER);
+        p.add(none, BorderLayout.EAST);
         return p;
     }
 
     private void resetDate() {
-        LocalDate weekAhead = controller.today().plusDays(7);
-        dateSpinner.setValue(Date.from(weekAhead.atStartOfDay(ZoneId.systemDefault()).toInstant()));
+        datePicker.setDate(controller.today().plusDays(7));
     }
 
     private LocalDate selectedDate() {
-        if (noDate.isSelected()) {
-            return null;
-        }
-        Date d = (Date) dateSpinner.getValue();
-        Calendar cal = Calendar.getInstance();
-        cal.setTime(d);
-        return LocalDate.of(cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH));
+        return noDate.isSelected() ? null : datePicker.getDate();
     }
 
     /** Reloads the table from the controller and shows the empty state when there is nothing. */
@@ -249,7 +245,9 @@ public class PantryPanel extends JPanel {
     }
 
     private void updateButtons() {
-        removeButton.setEnabled(model.getRowCount() > 0 && table.getSelectedRow() >= 0);
+        boolean selected = model.getRowCount() > 0 && table.getSelectedRow() >= 0;
+        editButton.setEnabled(selected);
+        removeButton.setEnabled(selected);
     }
 
     // ------------------------------------------------------------ actions
@@ -332,6 +330,135 @@ public class PantryPanel extends JPanel {
         return merged[0];
     }
 
+    /** The "Edit item" dialog for the selected row (F03). */
+    private void editSelected() {
+        int viewRow = table.getSelectedRow();
+        if (viewRow < 0) {
+            return;
+        }
+        PantryItem item = model.getItemAt(table.convertRowIndexToModel(viewRow));
+        new EditDialog(item).setVisible(true);
+        refresh();
+        selectItem(item.getId());
+    }
+
+    private void selectItem(String id) {
+        for (int r = 0; r < model.getRowCount(); r++) {
+            if (model.getItemAt(r).getId().equals(id)) {
+                int view = table.convertRowIndexToView(r);
+                table.getSelectionModel().setSelectionInterval(view, view);
+                return;
+            }
+        }
+    }
+
+    private final class EditDialog extends JDialog {
+        private static final long serialVersionUID = 1L;
+        private final transient PantryItem item;
+        private final JTextField name = new JTextField(16);
+        private final JTextField qty = new JTextField(5);
+        private final JComboBox<String> unit = new JComboBox<>(UNITS);
+        private final JComboBox<StorageLocation> location = new JComboBox<>(StorageLocation.values());
+        private final DatePicker date;
+        private final JCheckBox none = new JCheckBox("No date");
+        private final JLabel error = Theme.label(" ", Font.PLAIN, 12f, Theme.DANGER_FG);
+        private final transient Border nameNormal = name.getBorder();
+        private final transient Border qtyNormal = qty.getBorder();
+
+        EditDialog(PantryItem item) {
+            super(SwingUtilities.getWindowAncestor(PantryPanel.this), "Edit item",
+                    java.awt.Dialog.ModalityType.APPLICATION_MODAL);
+            this.item = item;
+            date = new DatePicker(item.hasBestBefore() ? item.getBestBefore() : controller.today().plusDays(7),
+                    controller::today);
+            name.setText(item.getName());
+            qty.setText(InputParser.formatQuantity(item.getQuantity()));
+            unit.setEditable(true);
+            unit.setSelectedItem(item.getUnit());
+            location.setRenderer(new LocationRenderer());
+            location.setSelectedItem(item.getLocation());
+            none.setOpaque(false);
+            none.setSelected(!item.hasBestBefore());
+            date.setEnabled(item.hasBestBefore());
+            none.addActionListener(e -> date.setEnabled(!none.isSelected()));
+
+            JPanel body = new JPanel(new BorderLayout(0, 10));
+            body.setBackground(Theme.CARD);
+            body.setBorder(BorderFactory.createEmptyBorder(16, 18, 14, 18));
+            body.add(Theme.label("Edit " + item.getName(), Font.BOLD, 15f, Theme.TEXT), BorderLayout.NORTH);
+
+            JPanel grid = new JPanel(new GridBagLayout());
+            grid.setOpaque(false);
+            GridBagConstraints c = new GridBagConstraints();
+            c.insets = new Insets(4, 0, 4, 10);
+            c.anchor = GridBagConstraints.WEST;
+            c.fill = GridBagConstraints.HORIZONTAL;
+            String[] labels = {"Name", "Qty", "Unit", "Location", "Best before"};
+            JComponent[] fields = {name, qty, unit, location, datePanel(date, none)};
+            for (int i = 0; i < labels.length; i++) {
+                c.gridy = i;
+                c.gridx = 0;
+                c.weightx = 0;
+                grid.add(Theme.muted(labels[i]), c);
+                c.gridx = 1;
+                c.weightx = 1;
+                grid.add(fields[i], c);
+            }
+            JPanel middle = new JPanel(new BorderLayout(0, 6));
+            middle.setOpaque(false);
+            middle.add(grid, BorderLayout.CENTER);
+            middle.add(error, BorderLayout.SOUTH);
+            body.add(middle, BorderLayout.CENTER);
+
+            JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+            buttons.setOpaque(false);
+            JButton cancel = Theme.secondary("Cancel");
+            JButton save = Theme.primary("Save changes");
+            cancel.addActionListener(e -> dispose());
+            save.addActionListener(e -> save());
+            buttons.add(cancel);
+            buttons.add(save);
+            body.add(buttons, BorderLayout.SOUTH);
+
+            setContentPane(body);
+            getRootPane().setDefaultButton(save);
+            pack();
+            setMinimumSize(new Dimension(400, getHeight()));
+            setLocationRelativeTo(PantryPanel.this);
+        }
+
+        private void save() {
+            FormCheck check = checkForm(name.getText(), qty.getText());
+            markError(name, nameNormal, check.nameBad());
+            markError(qty, qtyNormal, check.qtyBad());
+            if (check.message() != null) {
+                error.setText(check.message());
+                return;
+            }
+            try {
+                controller.updatePantryItem(item.getId(), name.getText().trim(), InputParser.quantity(qty.getText()),
+                        String.valueOf(unit.getEditor().getItem()).trim(), (StorageLocation) location.getSelectedItem(),
+                        none.isSelected() ? null : date.getDate());
+                dispose();
+            } catch (IllegalArgumentException ex) {
+                markError(name, nameNormal, ex.getMessage().startsWith("There is already"));
+                error.setText(ex.getMessage());
+            }
+        }
+    }
+
+    /** Shows FRIDGE as "Fridge" in the location lists. */
+    private static final class LocationRenderer extends javax.swing.DefaultListCellRenderer {
+        private static final long serialVersionUID = 1L;
+
+        @Override
+        public Component getListCellRendererComponent(javax.swing.JList<?> list, Object value, int index,
+                                                      boolean selected, boolean focus) {
+            String text = value == null ? "" : capitalize(value.toString());
+            return super.getListCellRendererComponent(list, text, index, selected, focus);
+        }
+    }
+
     private void removeSelected() {
         int viewRow = table.getSelectedRow();
         if (viewRow < 0) {
@@ -350,7 +477,7 @@ public class PantryPanel extends JPanel {
         nameField.setText("");
         qtyField.setText("1");
         noDate.setSelected(false);
-        dateSpinner.setEnabled(true);
+        datePicker.setEnabled(true);
         resetDate();
         errorLabel.setText(" ");
         nameField.requestFocusInWindow();

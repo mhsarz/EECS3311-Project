@@ -145,4 +145,44 @@ class PantryManagerTest {
         assertTrue(pm.checkRecipe(r).allInStock());
         assertThrows(IllegalArgumentException.class, () -> pm.checkRecipe(null));
     }
+
+    @Test
+    void updateItemKeepsTheIdAndChangesEverythingElse() {
+        PantryManager pm = new PantryManager();
+        PantryItem milk = item("milk", 1, null);
+        pm.addItem(milk);
+        pm.addItem(item("rice", 2, null));
+        PantryItem changed = pm.updateItem(milk.getId(), " Oat milk ", 2.5, "L", StorageLocation.FRIDGE, TODAY);
+        assertEquals(milk.getId(), changed.getId());
+        assertEquals("Oat milk", changed.getName());
+        assertEquals(2.5, changed.getQuantity());
+        assertEquals("L", changed.getUnit());
+        assertEquals(StorageLocation.FRIDGE, changed.getLocation());
+        assertEquals(TODAY, changed.getBestBefore());
+        assertEquals("Oat milk", pm.getAll().get(0).getName());     // same place in the list
+        assertEquals(2, pm.getAll().size());
+        pm.updateItem(milk.getId(), "OAT MILK", 1, "L", StorageLocation.FRIDGE, null);   // own name, other case: fine
+        assertNull(pm.getAll().get(0).getBestBefore());
+    }
+
+    @Test
+    void updateItemRejectsBadValuesAndTakenNames() {
+        PantryManager pm = new PantryManager();
+        PantryItem milk = item("milk", 1, null);
+        pm.addItem(milk);
+        pm.addItem(item("Rice", 2, null));
+        IllegalArgumentException taken = assertThrows(IllegalArgumentException.class,
+                () -> pm.updateItem(milk.getId(), "rice", 1, "", StorageLocation.PANTRY, null));
+        assertEquals("There is already Rice in your pantry.", taken.getMessage());
+        assertThrows(IllegalArgumentException.class,
+                () -> pm.updateItem(milk.getId(), "milk", 0, "", StorageLocation.PANTRY, null));
+        assertThrows(IllegalArgumentException.class,
+                () -> pm.updateItem(milk.getId(), " ", 1, "", StorageLocation.PANTRY, null));
+        assertThrows(IllegalArgumentException.class,
+                () -> pm.updateItem(milk.getId(), "milk", 1, "", null, null));
+        assertThrows(IllegalArgumentException.class,
+                () -> pm.updateItem("no-such-id", "milk", 1, "", StorageLocation.PANTRY, null));
+        assertEquals("milk", pm.getAll().get(0).getName());         // nothing changed
+        assertEquals(1, pm.getAll().get(0).getQuantity());
+    }
 }

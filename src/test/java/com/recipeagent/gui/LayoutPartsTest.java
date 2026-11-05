@@ -103,4 +103,28 @@ class LayoutPartsTest {
         assertEquals(flatOnClasspath, flat);
         assertEquals(Theme.BACKGROUND, javax.swing.UIManager.getColor("Panel.background"));
     }
+
+    @Test
+    void datePickerCalendarShowsSixWeeksFromSunday() {
+        java.util.List<java.time.LocalDate> nov = DatePicker.monthCells(java.time.YearMonth.of(2026, 11));
+        assertEquals(42, nov.size());
+        assertEquals(java.time.LocalDate.of(2026, 11, 1), nov.get(0));     // Nov 1, 2026 is a Sunday
+        assertEquals(java.time.LocalDate.of(2026, 12, 12), nov.get(41));
+        java.util.List<java.time.LocalDate> feb = DatePicker.monthCells(java.time.YearMonth.of(2027, 2));
+        assertEquals(java.time.LocalDate.of(2027, 1, 31), feb.get(0));     // starts on the Sunday before
+        assertEquals(java.time.DayOfWeek.SUNDAY, feb.get(0).getDayOfWeek());
+        assertEquals("November 2026", DatePicker.monthTitle(java.time.YearMonth.of(2026, 11)));
+        assertEquals(java.util.List.of("Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"), DatePicker.weekdayNames());
+    }
+
+    @Test
+    void datePickerShowsTheChosenDate() {
+        java.time.LocalDate today = java.time.LocalDate.of(2026, 11, 5);
+        DatePicker p = new DatePicker(today.plusDays(7), () -> today);
+        assertEquals(today.plusDays(7), p.getDate());
+        assertEquals("Nov 12, 2026", p.getShownText());
+        p.setDate(java.time.LocalDate.of(2027, 1, 3));
+        assertEquals("Jan 3, 2027", p.getShownText());
+        assertThrows(IllegalArgumentException.class, () -> p.setDate(null));
+    }
 }

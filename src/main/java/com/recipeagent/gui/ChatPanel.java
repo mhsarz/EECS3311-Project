@@ -10,7 +10,14 @@ import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
-import javax.swing.JTextField;
+import javax.swing.AbstractAction;
+import javax.swing.InputMap;
+import javax.swing.JComponent;
+import javax.swing.JTextArea;
+import javax.swing.KeyStroke;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+import javax.swing.text.DefaultEditorKit;
 import javax.swing.SwingUtilities;
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -21,6 +28,9 @@ import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
+import java.awt.event.ActionEvent;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -35,6 +45,8 @@ public class ChatPanel extends JPanel {
 
     private static final long serialVersionUID = 1L;
     static final int WIDTH = 280;
+    /** The input grows with the text up to this many lines, then scrolls. */
+    static final int MAX_INPUT_LINES = 4;
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH);
 
     private final transient AgentController controller;
@@ -44,7 +56,8 @@ public class ChatPanel extends JPanel {
     private final JPanel collapsedStrip = new JPanel(new BorderLayout());
     private final JPanel messages = new JPanel();
     private final JScrollPane scroll;
-    private final JTextField input = new JTextField();
+    private final JTextArea input = new JTextArea(1, 10);
+    private final JScrollPane inputScroll;
     private final JButton send = Theme.primary("Send");
     private JLabel thinking;
     private boolean startedToday;
@@ -92,11 +105,45 @@ public class ChatPanel extends JPanel {
         bottom.setBackground(Theme.CARD);
         bottom.setBorder(BorderFactory.createEmptyBorder(8, 12, 10, 12));
         input.putClientProperty("JTextField.placeholderText", "Ask or add an item…");
-        input.setToolTipText("Ask or add an item, e.g. \"What can I make with chicken?\"");
-        input.addActionListener(e -> sendMessage());
+        input.setToolTipText("Enter sends · Shift+Enter starts a new line");
+        input.setLineWrap(true);
+        input.setWrapStyleWord(true);
+        input.setFont(Theme.font(Font.PLAIN, 12f));
+        input.setMargin(new java.awt.Insets(5, 6, 5, 6));
+        bindKeys(input);
+        inputScroll = new JScrollPane(input) {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public Dimension getPreferredSize() {
+                Dimension d = super.getPreferredSize();
+                return new Dimension(d.width, inputHeight());
+            }
+        };
+        inputScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        inputScroll.setBorder(BorderFactory.createLineBorder(Theme.BORDER));
+        input.getDocument().addDocumentListener(new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent e) {
+                bottom.revalidate();
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent e) {
+                bottom.revalidate();
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent e) {
+                bottom.revalidate();
+            }
+        });
         send.addActionListener(e -> sendMessage());
-        bottom.add(input, BorderLayout.CENTER);
-        bottom.add(send, BorderLayout.EAST);
+        JPanel sendBox = new JPanel(new BorderLayout());
+        sendBox.setOpaque(false);
+        sendBox.add(send, BorderLayout.SOUTH);           // stays at the bottom when the input grows
+        bottom.add(inputScroll, BorderLayout.CENTER);
+        bottom.add(sendBox, BorderLayout.EAST);
         bottom.add(Theme.muted("Review AI suggestions before cooking."), BorderLayout.SOUTH);
         body.add(bottom, BorderLayout.SOUTH);
         body.setPreferredSize(new Dimension(WIDTH, 100));
@@ -109,6 +156,42 @@ public class ChatPanel extends JPanel {
         collapsedStrip.add(expand, BorderLayout.NORTH);
 
         add(body, BorderLayout.CENTER);
+    }
+
+    /** Enter sends the message; Shift+Enter (or Ctrl+Enter) inserts a new line. */
+    private void bindKeys(JTextArea area) {
+        InputMap keys = area.getInputMap(JComponent.WHEN_FOCUSED);
+        keys.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "send-message");
+        keys.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, InputEvent.SHIFT_DOWN_MASK), DefaultEditorKit.insertBreakAction);
+        keys.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, InputEvent.CTRL_DOWN_MASK), DefaultEditorKit.insertBreakAction);
+        area.getActionMap().put("send-message", new AbstractAction() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                sendMessage();
+            }
+        });
+    }
+
+    /** Height of the input box: one line per line of text (wrapped lines too), up to MAX_INPUT_LINES. */
+    private int inputHeight() {
+        int lineHeight = input.getFontMetrics(input.getFont()).getHeight();
+        java.awt.Insets in = input.getInsets();
+        int width = inputScroll == null ? 0 : inputScroll.getViewport().getWidth();
+        int textHeight;
+        if (width > 0) {
+            input.setSize(width, Short.MAX_VALUE);           // so the wrapped height can be measured
+            textHeight = input.getPreferredSize().height - in.top - in.bottom;
+        } else {
+            textHeight = lineHeight;
+        }
+        int lines = Math.max(1, Math.min(MAX_INPUT_LINES, (textHeight + lineHeight - 1) / lineHeight));
+        return lines * lineHeight + in.top + in.bottom + 2;
+    }
+
+    JTextArea getInput() {
+        return input;
     }
 
     public void setCollapsed(boolean collapsed) {

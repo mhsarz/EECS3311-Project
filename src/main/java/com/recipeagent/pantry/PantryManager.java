@@ -4,6 +4,7 @@ import com.recipeagent.model.Ingredient;
 import com.recipeagent.model.IngredientCheck;
 import com.recipeagent.model.PantryItem;
 import com.recipeagent.model.Recipe;
+import com.recipeagent.model.StorageLocation;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -82,6 +83,31 @@ public class PantryManager {
         PantryItem item = findById(id).orElseThrow(
                 () -> new IllegalArgumentException("No pantry item with id " + id));
         item.setQuantity(item.getQuantity() + qty);
+    }
+
+    /**
+     * Changes an item (the Edit button in the Pantry tab, F03). The item keeps its id.
+     *
+     * @return the updated item
+     * @throws IllegalArgumentException if no item has this id, the quantity is not more than
+     *         zero, a value is invalid, or another item already has the new name
+     */
+    public PantryItem updateItem(String id, String name, double quantity, String unit,
+                                 StorageLocation location, LocalDate bestBefore) {
+        PantryItem old = findById(id).orElseThrow(
+                () -> new IllegalArgumentException("No pantry item with id " + id));
+        if (Double.isNaN(quantity) || quantity <= 0) {
+            throw new IllegalArgumentException("Quantity must be more than zero");
+        }
+        PantryItem updated = new PantryItem(old.getId(), name == null ? null : name.trim(),
+                quantity, unit, location, bestBefore);
+        for (PantryItem other : items) {
+            if (other != old && other.hasName(updated.getName())) {
+                throw new IllegalArgumentException("There is already " + other.getName() + " in your pantry.");
+            }
+        }
+        items.set(items.indexOf(old), updated);
+        return updated;
     }
 
     /** Removes the item with this id. Returns true if something was removed. */

@@ -346,4 +346,29 @@ class AgentControllerTest {
         assertEquals(IngredientStatus.MISSING, c.getIngredientStatuses(r).get(0));
         assertEquals(List.of("milk with lemon", "coconut cream"), c.checkIngredients(r).getMissingNames());
     }
+
+    @Test
+    void updatePantryItemIsSavedAndAlertsWhenTheNewDateIsClose() {
+        List<Notification> got = new ArrayList<>();
+        NotificationListener listener = got::add;
+        AgentController c = controller(null);
+        c.getNotifications().subscribe(listener);
+        try {
+            c.addPantryItem(item("milk", 1, TODAY.plusDays(10)), false);
+            String id = c.getPantryItems().get(0).getId();
+            c.updatePantryItem(id, "milk", 2, "L", StorageLocation.FRIDGE, TODAY.plusDays(10));
+            assertTrue(got.isEmpty());                                   // date not close
+            c.updatePantryItem(id, "milk", 2, "L", StorageLocation.FRIDGE, TODAY.plusDays(1));
+            assertEquals(1, got.size());
+            c.updatePantryItem(id, "milk", 3, "L", StorageLocation.FRIDGE, TODAY.plusDays(1));
+            assertEquals(1, got.size());                                 // same date: no repeat
+
+            PantryItem saved = controller(null).getPantryItems().get(0);
+            assertEquals(3, saved.getQuantity());
+            assertEquals("L", saved.getUnit());
+            assertEquals(TODAY.plusDays(1), saved.getBestBefore());
+        } finally {
+            c.getNotifications().unsubscribe(listener);
+        }
+    }
 }
