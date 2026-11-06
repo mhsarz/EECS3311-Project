@@ -24,7 +24,10 @@ import java.util.Set;
  */
 final class ShoppingReplies {
 
-    static final int MAX_FLYER_ITEMS = 300;
+    /** Most sale items kept from one flyer (a 24-page flyer has about 600). */
+    static final int MAX_FLYER_ITEMS = 1000;
+    /** Most pages a PDF can have (the Messages API's limit for one request is higher). */
+    static final int MAX_PAGES = 600;
     static final int MAX_ITEM_NAME = 80;
     static final double MAX_PRICE = 1000;
 
@@ -35,6 +38,57 @@ final class ShoppingReplies {
 
     /** Reads {"end_date": ..., "items": [{"name", "price"}]} into a Flyer for {@code store}. */
     static Flyer toFlyer(JsonObject o, String store) throws ReplyParser.ReplyException {
+        List<FlyerItem> items = items(o);
+        if (items.isEmpty()) {
+            throw new ReplyParser.ReplyException("no sale items with a price were found");
+        }
+        return new Flyer(store, date(ReplyParser.optionalString(o, "end_date", null)), items);
+    }
+
+    /**
+     * The sale items found on some pages of a PDF flyer, with its end date and page count if
+     * the reply gave them. Pages with no sale items (covers, ads) give an empty list.
+     */
+    record FlyerPart(List<FlyerItem> items, LocalDate endDate, Integer pageCount) {
+
+        /** The items of both parts without repeats (the first price is kept), and the first known date and count. */
+        FlyerPart plus(FlyerPart other) {
+            return new FlyerPart(merge(items, other.items), endDate != null ? endDate : other.endDate,
+                    pageCount != null ? pageCount : other.pageCount);
+        }
+    }
+
+    /** Reads {"page_count": n, "end_date": ..., "items": [...]} for some pages of a PDF flyer. */
+    static FlyerPart toFlyerPart(JsonObject o) throws ReplyParser.ReplyException {
+        Integer pages = null;
+        JsonElement pc = o.get("page_count");
+        if (pc != null && pc.isJsonPrimitive()) {
+            try {
+                int n = (int) Math.round(pc.getAsDouble());
+                pages = n >= 1 && n <= MAX_PAGES ? n : null;
+            } catch (NumberFormatException e) {
+                pages = null;                                    // an unreadable count is ignored
+            }
+        }
+        return new FlyerPart(items(o), date(ReplyParser.optionalString(o, "end_date", null)), pages);
+    }
+
+    /** Items from two lists without repeats (by name, ignoring case), at most MAX_FLYER_ITEMS. */
+    static List<FlyerItem> merge(List<FlyerItem> a, List<FlyerItem> b) {
+        List<FlyerItem> result = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (List<FlyerItem> list : List.of(a, b)) {
+            for (FlyerItem i : list) {
+                if (result.size() < MAX_FLYER_ITEMS && seen.add(i.getName().toLowerCase(Locale.ROOT))) {
+                    result.add(i);
+                }
+            }
+        }
+        return result;
+    }
+
+    /** The checked items of a reply: each needs a name and a sensible price; repeats are dropped. */
+    private static List<FlyerItem> items(JsonObject o) throws ReplyParser.ReplyException {
         List<FlyerItem> items = new ArrayList<>();
         Set<String> seen = new HashSet<>();
         for (JsonElement el : ReplyParser.requiredArray(o, "items")) {
@@ -58,10 +112,7 @@ final class ShoppingReplies {
                 items.add(new FlyerItem(name, price));
             }
         }
-        if (items.isEmpty()) {
-            throw new ReplyParser.ReplyException("no sale items with a price were found");
-        }
-        return new Flyer(store, date(ReplyParser.optionalString(o, "end_date", null)), items);
+        return items;
     }
 
     /** A price as a number, or as text like "$3.99" or "3,99"; null if missing or not sensible. */

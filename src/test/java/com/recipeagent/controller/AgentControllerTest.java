@@ -435,6 +435,47 @@ class AgentControllerTest {
     }
 
     @Test
+    void longPdfNeedsEnoughCallsLeftAndReportsProgress() throws Exception {
+        StringBuilder sb = new StringBuilder("%PDF-1.7\n");
+        for (int i = 0; i < 24; i++) {
+            sb.append("<< /Type /Page >>\n");
+        }
+        Path pdf = tmp.resolve("No Frills.pdf");
+        java.nio.file.Files.writeString(pdf, sb.toString());
+
+        List<String> prompts = new ArrayList<>();
+        LLMClient llm = new LLMClient() {
+            @Override
+            public LLMResponse generate(String prompt, List<AgentTool> tools) {
+                return LLMResponse.text("{\"matches\":[]}");
+            }
+
+            @Override
+            public LLMResponse generate(String prompt, List<AgentTool> tools, List<com.recipeagent.llm.Attachment> f) {
+                prompts.add(prompt);
+                return LLMResponse.text("{\"page_count\":24,\"items\":[{\"name\":\"Item " + prompts.size()
+                        + "\",\"price\":1." + prompts.size() + "}]}");
+            }
+        };
+        AgentController few = controller(llm, 5);                               // 24 pages need 6 calls
+        LLMUnavailableException e = assertThrows(LLMUnavailableException.class, () -> few.uploadFlyer(pdf, "No Frills"));
+        assertTrue(e.getMessage().contains("24-page PDF needs about 6 AI calls, but only 5 are left today"));
+        assertTrue(prompts.isEmpty());                                          // nothing was sent
+
+        AgentController c = controller(llm, 100);
+        List<String> progress = new ArrayList<>();
+        FlyerRefresh r = c.uploadFlyer(pdf, "No Frills", progress::add);
+        assertEquals(6, prompts.size());
+        assertEquals(6, r.getUpdated().get(0).getItems().size());
+        assertEquals("Reading pages 1-4 of 24…", progress.get(0));
+        assertEquals("Reading pages 21-24 of 24…", progress.get(5));
+
+        progress.clear();
+        c.refreshFlyers(progress::add);                                        // the uploaded file is read again
+        assertEquals("No Frills: Reading pages 1-4 of 24…", progress.get(0));
+    }
+
+    @Test
     void uploadFlyerReadsTheFileSavesItAndChecksTheCart() throws Exception {
         ScriptedLLM llm = new ScriptedLLM();
         llm.replies.add(LLMResponse.text(MILK_FLYER));

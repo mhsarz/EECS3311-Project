@@ -236,4 +236,115 @@ class FlyerAgentTest {
         assertTrue(text.prompts.get(0).contains("<flyer_text>"));
         assertThrows(IllegalArgumentException.class, () -> agent(text).extractFlyer((FlyerContent) null, "Metro", TODAY));
     }
+
+    /** Answers PDF prompts from a list of replies and remembers the page ranges asked for. */
+    private static class PdfLLM implements LLMClient {
+        final Deque<LLMResponse> replies = new ArrayDeque<>();
+        final List<String> prompts = new ArrayList<>();
+
+        PdfLLM reply(String json) {
+            replies.add(LLMResponse.text(json));
+            return this;
+        }
+
+        PdfLLM cutOff() {
+            replies.add(new LLMResponse("{\"items\": [{\"name\": \"Ap", null, null, "max_tokens", 100, 16000));
+            return this;
+        }
+
+        @Override
+        public LLMResponse generate(String prompt, List<AgentTool> tools) {
+            fail("PDF prompts must attach the PDF");
+            return null;
+        }
+
+        @Override
+        public LLMResponse generate(String prompt, List<AgentTool> tools, List<Attachment> files) {
+            assertEquals(1, files.size());
+            prompts.add(prompt);
+            return replies.isEmpty() ? LLMResponse.text("{\"items\":[]}") : replies.poll();
+        }
+    }
+
+    private static FlyerContent pdfWithPages(int pages) {
+        StringBuilder sb = new StringBuilder("%PDF-1.7\n");
+        for (int i = 0; i < pages; i++) {
+            sb.append(i + 1).append(" 0 obj << /Type /Page /Parent 99 0 R >> endobj\n");
+        }
+        sb.append("99 0 obj << /Type /Pages /Count ").append(pages).append(" >> endobj\n");
+        return FlyerContent.pdf(sb.toString().getBytes(java.nio.charset.StandardCharsets.US_ASCII), "flyer.pdf");
+    }
+
+    @Test
+    void longPdfIsReadAFewPagesAtATime() {
+        PdfLLM llm = new PdfLLM()
+                .reply("{\"page_count\":10,\"end_date\":\"2026-11-11\",\"items\":[{\"name\":\"Apples\",\"price\":3.99}]}")
+                .reply("{\"page_count\":10,\"end_date\":null,\"items\":[{\"name\":\"APPLES\",\"price\":2},"
+                        + "{\"name\":\"Milk 4L\",\"price\":5.49}]}")
+                .reply("{\"page_count\":10,\"items\":[]}");                      // last pages: only ads
+        List<String> progress = new ArrayList<>();
+        assertEquals(10, pdfWithPages(10).getPageCount());
+        Flyer f = agent(llm).extractFlyer(pdfWithPages(10), "No Frills", TODAY, progress::add);
+
+        assertEquals(3, llm.prompts.size());
+        assertTrue(llm.prompts.get(0).contains("pages 1 to 4 of the attached PDF flyer of No Frills (the PDF has 10 pages)"));
+        assertTrue(llm.prompts.get(1).contains("pages 5 to 8"));
+        assertTrue(llm.prompts.get(2).contains("pages 9 to 10"));
+        assertTrue(llm.prompts.get(0).contains("the other pages are read separately"));
+        assertEquals(List.of("Reading pages 1-4 of 10…", "Reading pages 5-8 of 10…", "Reading pages 9-10 of 10…"), progress);
+        assertEquals(2, f.getItems().size());                                   // "APPLES" repeated: first kept
+        assertEquals(3.99, f.getItems().get(0).getSalePrice());
+        assertEquals(LocalDate.of(2026, 11, 11), f.getEndDate());
+        assertEquals(3, RecipeAgent.callsForPages(10));
+        assertEquals(6, RecipeAgent.callsForPages(24));
+        assertEquals(1, RecipeAgent.callsForPages(-1));
+    }
+
+    @Test
+    void cutOffRepliesAreSplitIntoFewerPages() {
+        PdfLLM llm = new PdfLLM().cutOff()                                         // pages 1-4: too many items
+                .reply("{\"page_count\":4,\"items\":[{\"name\":\"Apples\",\"price\":3.99}]}")      // pages 1-2
+                .reply("{\"page_count\":4,\"items\":[{\"name\":\"Bread\",\"price\":2.5}]}");      // pages 3-4
+        Flyer f = agent(llm).extractFlyer(pdfWithPages(4), "Metro", TODAY);
+        assertEquals(3, llm.prompts.size());
+        assertTrue(llm.prompts.get(1).contains("pages 1 to 2"));
+        assertTrue(llm.prompts.get(2).contains("pages 3 to 4"));
+        assertEquals(2, f.getItems().size());
+
+        PdfLLM one = new PdfLLM().cutOff().cutOff();                               // a single page still too long
+        FlyerContent page = pdfWithPages(1);
+        LLMException e = assertThrows(LLMException.class, () -> agent(one).extractFlyer(page, "Metro", TODAY));
+        assertTrue(e.getMessage().contains("page 1 of the Metro flyer"));
+        assertTrue(e.getMessage().contains("cut off"));
+    }
+
+    @Test
+    void pageCountFromTheReplyWhenThePdfCannotBeCounted() {
+        FlyerContent compressed = FlyerContent.pdf("%PDF-1.7 compressed objects only".getBytes(
+                java.nio.charset.StandardCharsets.US_ASCII), "x.pdf");
+        assertEquals(-1, compressed.getPageCount());
+        PdfLLM llm = new PdfLLM()
+                .reply("{\"page_count\":6,\"items\":[{\"name\":\"Apples\",\"price\":3.99}]}")
+                .reply("{\"page_count\":6,\"items\":[{\"name\":\"Kale\",\"price\":1.99}]}");
+        Flyer f = agent(llm).extractFlyer(compressed, "FreshCo", TODAY);
+        assertTrue(llm.prompts.get(0).contains("If the PDF has fewer pages, stop at its last page."));
+        assertTrue(llm.prompts.get(1).contains("pages 5 to 6 of the attached PDF flyer of FreshCo (the PDF has 6 pages)"));
+        assertEquals(2, f.getItems().size());
+
+        PdfLLM none = new PdfLLM().reply("{\"page_count\":2,\"items\":[]}");
+        LLMException e = assertThrows(LLMException.class, () -> agent(none).extractFlyer(pdfWithPages(2), "FreshCo", TODAY));
+        assertTrue(e.getMessage().contains("found no sale items"));
+    }
+
+    @Test
+    void flyerPartsAndPageText() throws Exception {
+        ShoppingReplies.FlyerPart p = ShoppingReplies.toFlyerPart(json("{\"page_count\": \"7\", \"items\": []}"));
+        assertEquals(7, p.pageCount().intValue());
+        assertTrue(p.items().isEmpty());
+        assertNull(ShoppingReplies.toFlyerPart(json("{\"page_count\": 9000, \"items\": []}")).pageCount());
+        assertNull(ShoppingReplies.toFlyerPart(json("{\"page_count\": \"many\", \"items\": []}")).pageCount());
+        assertThrows(Exception.class, () -> ShoppingReplies.toFlyerPart(json("{\"page_count\": 3}")));
+        assertEquals("Reading page 25 of 25…", RecipeAgent.pagesText(25, 25, 25));
+        assertEquals("Reading pages 1-4…", RecipeAgent.pagesText(1, 4, -1));
+    }
 }

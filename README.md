@@ -133,8 +133,11 @@ dependency) and falls back to the system look if FlatLaf is missing. Tabs:
   **Upload flyer…** and choose the store's flyer: a **PDF** downloaded from the store's website
   (up to 32 MB; the AI reads every page, including prices that are only in pictures), or a `.txt`
   file with the flyer page copied into it (saved `.html` pages work too). The AI reads the sale
-  items and prices, and the cart is checked for sales. A PDF takes longer (up to a minute) and
-  costs more tokens than text: roughly 1,500-3,000 per page plus the page image. Search and filter by store; "In your cart" shows the matches.
+  items and prices, and the cart is checked for sales. A long PDF is read 4 pages per AI call
+  (a 24-page flyer takes 6 calls and a few minutes; the page being read is shown), because one
+  reply cannot hold all ~600 items. The PDF is cached by the API, so the later calls cost little.
+  Each page costs roughly 1,500-3,000 tokens plus the page image; `claude-haiku-5-5` keeps a big
+  flyer to a few cents. Search and filter by store; "In your cart" shows the matches.
   The chat can answer "What's on sale at No Frills?".
 - **Profile**: your diet, allergies, dislikes and default portions, used by every recipe. Fill in the
   form (type an allergy or dislike and press Enter; click × to remove it) and click **Save profile**,
@@ -241,6 +244,8 @@ or type in the **Chat** panel.
 - **"Anthropic API returned HTTP 401"**: the key is wrong or was revoked. **HTTP 404**: check
   `LLM_MODEL`. **HTTP 429 / 529**: too many requests or the service is busy; the app waits and tries
   once more, then asks you to try again later.
+- **"This 24-page PDF needs about 6 AI calls, but only N are left today"**: raise `LLM_DAILY_LIMIT`,
+  or save only the pages you need as a smaller PDF.
 - **"The daily limit of 100 LLM calls has been reached"**: raise `LLM_DAILY_LIMIT` in `.env`, or wait until tomorrow.
 - **A recipe or flyer could not be used**: the app checks every AI answer and asks again once with the
   reason; if the second answer is also unusable it shows the reason. Try again or change the request.

@@ -12,11 +12,13 @@ public final class FlyerContent {
     private final String text;
     private final byte[] pdf;
     private final String fileName;
+    private final int pageCount;
 
     private FlyerContent(String text, byte[] pdf, String fileName) {
         this.text = text;
         this.pdf = pdf;
         this.fileName = fileName;
+        this.pageCount = pdf == null ? -1 : countPages(pdf);
     }
 
     /** A flyer as text. */
@@ -54,9 +56,73 @@ public final class FlyerContent {
         return fileName;
     }
 
+    /** The number of pages in the PDF, or -1 if it could not be counted (or this is text). */
+    public int getPageCount() {
+        return pageCount;
+    }
+
+    /**
+     * Counts the pages of a PDF without a PDF library: each page is an object with
+     * "/Type /Page"; if those are hidden in compressed object streams, the page tree's
+     * "/Count n" is used instead. Returns -1 if neither is found.
+     */
+    static int countPages(byte[] b) {
+        int pages = 0;
+        int maxCount = -1;
+        for (int i = 0; i < b.length; i++) {
+            if (matches(b, i, "/Type")) {
+                int j = skipSpaces(b, i + 5);
+                if (matches(b, j, "/Page") && !isLetter(b, j + 5)) {
+                    pages++;
+                }
+            } else if (matches(b, i, "/Count")) {
+                int j = skipSpaces(b, i + 6);
+                int n = 0;
+                int digits = 0;
+                while (j < b.length && b[j] >= '0' && b[j] <= '9' && digits < 6) {
+                    n = n * 10 + (b[j] - '0');
+                    j++;
+                    digits++;
+                }
+                if (digits > 0) {
+                    maxCount = Math.max(maxCount, n);
+                }
+            }
+        }
+        if (pages > 0) {
+            return pages;
+        }
+        return maxCount > 0 ? maxCount : -1;
+    }
+
+    private static boolean matches(byte[] b, int at, String word) {
+        if (at < 0 || at + word.length() > b.length) {
+            return false;
+        }
+        for (int k = 0; k < word.length(); k++) {
+            if (b[at + k] != word.charAt(k)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static int skipSpaces(byte[] b, int at) {
+        while (at < b.length && (b[at] == ' ' || b[at] == '\r' || b[at] == '\n' || b[at] == '\t')) {
+            at++;
+        }
+        return at;
+    }
+
+    private static boolean isLetter(byte[] b, int at) {
+        return at < b.length && Character.isLetter((char) (b[at] & 0xff));
+    }
+
     @Override
     public String toString() {
-        return isPdf() ? "PDF " + fileName + " (" + pdf.length + " bytes)" : "text (" + text.length() + " characters)";
+        return isPdf() ? "PDF " + fileName + " (" + pdf.length + " bytes, "
+                + (pageCount < 0 ? "pages unknown" : pageCount + (pageCount == 1 ? " page" : " pages")) + ")"
+                : "text (" + text.length() + " characters)";
     }
 
     @Override

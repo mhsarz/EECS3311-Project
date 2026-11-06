@@ -153,4 +153,23 @@ class FlyerSourcesTest {
         String text = FlyerText.tidy("a".repeat(FlyerText.MAX_CHARS + 50));
         assertEquals(FlyerText.MAX_CHARS, text.length());
     }
+
+    @Test
+    void pdfPagesAreCountedAndLimited() throws Exception {
+        String three = "%PDF-1.7 1 0 obj <</Type /Page>> 2 0 obj <</Type/Page /Rotate 0>> "
+                + "3 0 obj <</Type\n/Page>> 4 0 obj <</Type /Pages /Count 3>> 5 0 obj <</Type /PageLabel>>";
+        assertEquals(3, FlyerContent.countPages(three.getBytes(StandardCharsets.US_ASCII)));
+        assertEquals(24, FlyerContent.countPages("%PDF-1.7 <</Count 24>> <</Count 3>>".getBytes(StandardCharsets.US_ASCII)));
+        assertEquals(-1, FlyerContent.countPages("%PDF-1.7 nothing".getBytes(StandardCharsets.US_ASCII)));
+        assertTrue(FlyerContent.pdf(three.getBytes(StandardCharsets.US_ASCII), "a.pdf").toString().contains("3 pages"));
+
+        StringBuilder many = new StringBuilder("%PDF-1.7\n");
+        for (int i = 0; i <= FileFlyerSource.MAX_PDF_PAGES; i++) {
+            many.append("<< /Type /Page >>\n");
+        }
+        Path big = tmp.resolve("catalogue.pdf");
+        Files.writeString(big, many.toString(), StandardCharsets.US_ASCII);
+        FlyerException e = assertThrows(FlyerException.class, () -> new FileFlyerSource(big).fetch("X"));
+        assertTrue(e.getMessage().contains("has 101 pages; the app reads at most 100"));
+    }
 }

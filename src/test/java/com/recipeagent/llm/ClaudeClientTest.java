@@ -176,6 +176,7 @@ class ClaudeClientTest {
         assertEquals("base64", source.get("type").getAsString());
         assertEquals("application/pdf", source.get("media_type").getAsString());
         assertEquals(java.util.Base64.getEncoder().encodeToString(pdf), source.get("data").getAsString());
+        assertEquals("ephemeral", doc.getAsJsonObject("cache_control").get("type").getAsString());
         assertEquals("text", content.get(1).getAsJsonObject().get("type").getAsString());
         assertEquals("List the sale items.", content.get(1).getAsJsonObject().get("text").getAsString());
 

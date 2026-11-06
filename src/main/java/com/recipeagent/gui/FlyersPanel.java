@@ -21,6 +21,7 @@ import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
@@ -313,7 +314,7 @@ public class FlyersPanel extends JPanel {
     private void refreshFlyers() {
         int n = controller.getSelectedStores().size();
         Background.run(b -> setBusy(b, "Reading " + n + (n == 1 ? " flyer" : " flyers") + "… this can take a minute."),
-                controller::refreshFlyers,
+                () -> controller.refreshFlyers(this::showProgress),
                 result -> {
                     refresh();
                     dataChanged.run();
@@ -338,7 +339,7 @@ public class FlyersPanel extends JPanel {
         Background.run(b -> setBusy(b, readingText(store, file.getName())),
                 () -> {
                     try {
-                        return controller.uploadFlyer(path, store);
+                        return controller.uploadFlyer(path, store, m -> showProgress(store + ": " + m));
                     } catch (FlyerException e) {
                         throw new IllegalArgumentException(e.getMessage(), e);
                     }
@@ -376,6 +377,15 @@ public class FlyersPanel extends JPanel {
             return null;
         }
         return store;
+    }
+
+    /** Shows "No Frills: Reading pages 5-8 of 24…" while a long PDF is read (called off the EDT). */
+    private void showProgress(String text) {
+        SwingUtilities.invokeLater(() -> {
+            if (busy) {
+                say(text, Theme.MUTED);
+            }
+        });
     }
 
     private void setBusy(boolean b, String text) {

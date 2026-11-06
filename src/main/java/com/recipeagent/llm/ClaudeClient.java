@@ -22,11 +22,12 @@ import java.util.regex.Pattern;
 public class ClaudeClient implements LLMClient {
 
     /**
-     * Upper limit for one reply. Newer models may think before answering and the thinking
-     * counts towards this limit, so it is set well above the size of a recipe; only the
-     * tokens actually used are paid for.
+     * Upper limit for one reply. Newer models think before answering and the thinking counts
+     * towards this limit, so it is set well above the size of a recipe or a few flyer pages;
+     * only the tokens actually used are paid for. It stays under 21,333, above which the API
+     * expects streaming because long replies can hit HTTP timeouts.
      */
-    public static final int DEFAULT_MAX_TOKENS = 8000;
+    public static final int DEFAULT_MAX_TOKENS = 16000;
     private static final Pattern TOOL_NAME = Pattern.compile("[A-Za-z0-9_-]{1,64}");
 
     private final AnthropicApi sdk;
@@ -106,6 +107,11 @@ public class ClaudeClient implements LLMClient {
                 JsonObject doc = new JsonObject();
                 doc.addProperty("type", "document");
                 doc.add("source", source);
+                // Cache the document: a long flyer is read in several calls with the same PDF,
+                // and cached input costs a fraction of the normal price.
+                JsonObject cache = new JsonObject();
+                cache.addProperty("type", "ephemeral");
+                doc.add("cache_control", cache);
                 content.add(doc);
             }
             JsonObject text = new JsonObject();

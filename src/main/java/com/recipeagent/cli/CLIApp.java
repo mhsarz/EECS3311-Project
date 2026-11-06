@@ -679,7 +679,7 @@ public class CLIApp implements NotificationListener {
             }
             case "refresh": {
                 out.println("Reading the flyers of " + String.join(", ", controller.getSelectedStores()) + "...");
-                printRefresh(controller.refreshFlyers());
+                printRefresh(controller.refreshFlyers(this::progress));
                 return true;
             }
             case "upload":
@@ -701,13 +701,19 @@ public class CLIApp implements NotificationListener {
         boolean pdf = file.toLowerCase(Locale.ROOT).endsWith(".pdf");
         out.println("Reading the " + store + " flyer" + (pdf ? " (PDF, this can take a minute)..." : "..."));
         try {
-            printRefresh(controller.uploadFlyer(Path.of(file), store));
+            printRefresh(controller.uploadFlyer(Path.of(file), store, this::progress));
             return true;
         } catch (FlyerException e) {
             return error(e.getMessage());
         } catch (java.nio.file.InvalidPathException e) {
             return error("That is not a valid file path: " + file);
         }
+    }
+
+    /** "  Reading pages 5-8 of 24..." while a long PDF is read. */
+    private void progress(String text) {
+        out.println("  " + text.replace("…", "..."));
+        out.flush();
     }
 
     private void printRefresh(FlyerRefresh r) {

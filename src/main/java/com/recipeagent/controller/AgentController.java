@@ -53,6 +53,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 /**
  * The single entry point the GUI (MainWindow) and the CLI (CLIApp) use.
@@ -750,15 +751,42 @@ public class AgentController {
      * @throws LLMException            if the AI could not read the flyer
      */
     public FlyerRefresh uploadFlyer(Path file, String store) throws FlyerException {
+        return uploadFlyer(file, store, null);
+    }
+
+    /**
+     * Same as {@link #uploadFlyer(Path, String)}; {@code progress} (may be null) is told which
+     * pages of a long PDF are being read, e.g. "Reading pages 5-8 of 24…". It is called on
+     * the thread doing the upload.
+     */
+    public FlyerRefresh uploadFlyer(Path file, String store, Consumer<String> progress) throws FlyerException {
         String name = flyers.addStore(store);
         flyers.setSource(name, new FileFlyerSource(file));
         saveFlyers();
         FlyerContent content = flyers.fetchRaw(name);           // text, or a PDF the AI reads itself
-        Flyer flyer = agent.extractFlyer(content, name, today());
+        checkCallsLeft(content);
+        Flyer flyer = agent.extractFlyer(content, name, today(), progress);
         flyers.save(flyer);
         saveFlyers();
         clearEndedSales();
         return new FlyerRefresh(List.of(flyer), Map.of(), false, checkSales(cartNames()));
+    }
+
+    /**
+     * A long PDF needs one AI call per few pages; if fewer calls are left today, say so before
+     * starting, instead of stopping half-way through the flyer.
+     */
+    private void checkCallsLeft(FlyerContent content) {
+        if (!content.isPdf() || !llm.isAvailable()) {
+            return;                                              // the agent reports an unavailable AI
+        }
+        int needed = RecipeAgent.callsForPages(content.getPageCount());
+        int left = llm.getRemainingCalls();
+        if (needed > left) {
+            throw new LLMUnavailableException("This " + content.getPageCount() + "-page PDF needs about " + needed
+                    + " AI calls, but only " + left + " are left today (LLM_DAILY_LIMIT in .env). "
+                    + "Save only the pages with the sale items, or try again tomorrow.");
+        }
     }
 
     /**
@@ -770,6 +798,11 @@ public class AgentController {
      * @throws LLMUnavailableException if the AI is unavailable (UC10 2a: old flyers are kept)
      */
     public FlyerRefresh refreshFlyers() {
+        return refreshFlyers(null);
+    }
+
+    /** Same as {@link #refreshFlyers()}, telling {@code progress} (may be null) which store and pages are being read. */
+    public FlyerRefresh refreshFlyers(Consumer<String> progress) {
         List<String> stores = flyers.getSelectedStores();
         if (stores.isEmpty()) {
             throw new IllegalStateException("Pick at least one store first.");
@@ -783,7 +816,10 @@ public class AgentController {
         try {
             for (String store : stores) {
                 try {
-                    Flyer flyer = agent.extractFlyer(flyers.fetchRaw(store), store, today());
+                    FlyerContent content = flyers.fetchRaw(store);
+                    checkCallsLeft(content);
+                    Flyer flyer = agent.extractFlyer(content, store, today(),
+                            progress == null ? null : m -> progress.accept(store + ": " + m));
                     flyers.save(flyer);
                     updated.add(flyer);
                 } catch (FlyerException e) {

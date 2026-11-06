@@ -26,6 +26,11 @@ public class FileFlyerSource implements FlyerSource {
      * a third bigger, so 32 MB leaves plenty of room; flyer PDFs are usually 2-30 MB.
      */
     public static final long MAX_PDF_BYTES = 32_000_000;
+    /**
+     * Most pages in a PDF flyer. The AI reads a few pages per call, so a 24-page flyer takes
+     * about 6 calls; 100 pages would take 25.
+     */
+    public static final int MAX_PDF_PAGES = 100;
 
     private final Path file;
 
@@ -81,7 +86,12 @@ public class FileFlyerSource implements FlyerSource {
             throw new FlyerException("The PDF " + name + " is password-protected, so the AI cannot read it. "
                     + "Download the flyer again without a password, or save it as text.", false);
         }
-        return FlyerContent.pdf(bytes, name);
+        FlyerContent content = FlyerContent.pdf(bytes, name);
+        if (content.getPageCount() > MAX_PDF_PAGES) {
+            throw new FlyerException("The PDF " + name + " has " + content.getPageCount() + " pages; the app reads at most "
+                    + MAX_PDF_PAGES + ". Save only the pages with the sale items.", false);
+        }
+        return content;
     }
 
     private static boolean startsLikePdf(Path file) throws IOException {
