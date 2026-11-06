@@ -81,6 +81,12 @@ public class LLMClientProxy implements LLMClient {
 
     @Override
     public LLMResponse generate(String prompt, List<AgentTool> tools) {
+        return generate(prompt, tools, List.of());
+    }
+
+    /** Same checks and counting as a plain prompt; the files are passed on to the real client. */
+    @Override
+    public LLMResponse generate(String prompt, List<AgentTool> tools, List<Attachment> files) {
         if (prompt == null || prompt.isBlank()) {
             throw new IllegalArgumentException("Prompt must not be empty");
         }
@@ -94,7 +100,8 @@ public class LLMClientProxy implements LLMClient {
         }
         LLMResponse response;
         try {
-            response = real.generate(prompt, tools);
+            response = files == null || files.isEmpty() ? real.generate(prompt, tools)
+                    : real.generate(prompt, tools, files);
         } catch (LLMUnavailableException e) {
             throw e;
         } catch (RuntimeException e) {

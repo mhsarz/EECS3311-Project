@@ -14,24 +14,59 @@ import java.util.Locale;
  * and cooking time. The columns hold booleans, numbers and dates, so clicking a header sorts
  * them properly; the panel draws the heart and the stars.
  */
-public class HistoryTableModel extends AbstractTableModel {
+public class HistoryTableModel extends AbstractTableModel implements CheckColumn.Model {
 
     private static final long serialVersionUID = 1L;
-    static final String[] COLUMNS = {"", "Recipe", "Rating", "Cooked", "Last cooked", "Time"};
-    public static final int FAV_COLUMN = 0;
-    public static final int TITLE_COLUMN = 1;
-    public static final int RATING_COLUMN = 2;
-    public static final int COOKED_COLUMN = 3;
-    public static final int LAST_COOKED_COLUMN = 4;
-    public static final int TIME_COLUMN = 5;
+    static final String[] COLUMNS = {"", "", "Recipe", "Rating", "Cooked", "Last cooked", "Time"};
+    public static final int CHECK_COLUMN = CheckColumn.COLUMN;
+    public static final int FAV_COLUMN = 1;
+    public static final int TITLE_COLUMN = 2;
+    public static final int RATING_COLUMN = 3;
+    public static final int COOKED_COLUMN = 4;
+    public static final int LAST_COOKED_COLUMN = 5;
+    public static final int TIME_COLUMN = 6;
 
     private final transient List<Recipe> rows = new ArrayList<>();
+    /** Checked recipes, by id. Recipes hidden by the search or the favourites filter lose their check. */
+    private final transient CheckColumn.Keys<String> checked = new CheckColumn.Keys<>();
 
     /** Shows the recipes, most recently cooked first (see {@link #recentFirst}). */
     public void setRecipes(List<Recipe> recipes) {
         rows.clear();
         rows.addAll(recentFirst(recipes == null ? List.of() : recipes));
+        checked.retain(rows.stream().map(Recipe::getId).toList());
         fireTableDataChanged();
+    }
+
+    @Override
+    public boolean isRowChecked(int row) {
+        return checked.contains(rows.get(row).getId());
+    }
+
+    @Override
+    public void setRowChecked(int row, boolean on) {
+        checked.set(rows.get(row).getId(), on);
+        fireTableCellUpdated(row, CHECK_COLUMN);
+    }
+
+    @Override
+    public int getCheckedCount() {
+        return checked.size();
+    }
+
+    @Override
+    public void setAllChecked(boolean on) {
+        for (Recipe r : rows) {
+            checked.set(r.getId(), on);
+        }
+        if (!rows.isEmpty()) {
+            fireTableRowsUpdated(0, rows.size() - 1);       // keeps the selected row
+        }
+    }
+
+    /** The checked recipes, in table order. */
+    public List<Recipe> getCheckedRecipes() {
+        return rows.stream().filter(r -> checked.contains(r.getId())).toList();
     }
 
     public Recipe getRecipeAt(int row) {
@@ -95,6 +130,7 @@ public class HistoryTableModel extends AbstractTableModel {
     @Override
     public Class<?> getColumnClass(int column) {
         switch (column) {
+            case CHECK_COLUMN:
             case FAV_COLUMN:
                 return Boolean.class;
             case RATING_COLUMN:
@@ -112,6 +148,8 @@ public class HistoryTableModel extends AbstractTableModel {
     public Object getValueAt(int row, int column) {
         Recipe r = rows.get(row);
         switch (column) {
+            case CHECK_COLUMN:
+                return checked.contains(r.getId());
             case FAV_COLUMN:
                 return r.isFavourite();
             case TITLE_COLUMN:

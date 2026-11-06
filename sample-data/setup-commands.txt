@@ -33,6 +33,6 @@ cart add butter --qty 1 --unit lb
 cart list
 
 # F10 pick the stores to compare (the sample flyers are in sample-data/flyers)
-flyers pick "No Frills" Metro FreshCo
+flyers pick "No Frills" Metro FreshCo "Food Basics"
 flyers stores
 status

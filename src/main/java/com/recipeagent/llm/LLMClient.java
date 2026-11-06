@@ -23,4 +23,18 @@ public interface LLMClient {
      * @throws LLMException if the call fails
      */
     LLMResponse generate(String prompt, List<AgentTool> tools);
+
+    /**
+     * Sends a prompt with files for the model to read, such as a PDF flyer (F10). Clients
+     * that cannot send files only accept an empty list.
+     *
+     * @param files files sent with the prompt; may be empty
+     * @throws LLMException if the call fails, or files were given and this client cannot send them
+     */
+    default LLMResponse generate(String prompt, List<AgentTool> tools, List<Attachment> files) {
+        if (files == null || files.isEmpty()) {
+            return generate(prompt, tools);
+        }
+        throw new LLMException("This AI client cannot read attached files such as PDFs.");
+    }
 }

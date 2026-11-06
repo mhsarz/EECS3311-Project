@@ -1,4 +1,4 @@
-# AI demo for the Smart Pantry CLI. Needs LLM_API_KEY in .env (uses about 10-15 AI calls).
+# AI demo for the Smart Pantry CLI. Needs LLM_API_KEY in .env (uses about 15-20 AI calls).
 # Run sample-data/setup-commands.txt first, then from the project folder:
 #   java -jar target/recipe-agent-0.1.0-jar-with-dependencies.jar cli run sample-data/ai-demo-commands.txt
 
@@ -6,6 +6,8 @@
 flyers upload sample-data/flyers/sample-flyer-no-frills.txt --store "No Frills"
 flyers upload sample-data/flyers/sample-flyer-metro.txt --store Metro
 flyers upload sample-data/flyers/sample-flyer-freshco.html --store FreshCo
+# A PDF flyer: page 1 has text, page 2 is only a picture of the prices; the AI reads both
+flyers upload sample-data/flyers/sample-flyer-food-basics.pdf --store "Food Basics"
 flyers list --search milk
 
 # F02 sale alerts: milk and eggs are on sale; the cheapest store is picked

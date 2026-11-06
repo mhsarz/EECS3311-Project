@@ -127,11 +127,13 @@ public class CartPanel extends JPanel {
         table.setDefaultRenderer(Double.class, renderer);
         table.setDefaultRenderer(CartSource.class, renderer);
         table.setDefaultRenderer(Boolean.class, renderer);
+        CheckColumn.install(table, model, this::updateButtons);
         table.getSelectionModel().addListSelectionListener(e -> updateButtons());
         table.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
-                if (e.getClickCount() == 2 && table.rowAtPoint(e.getPoint()) >= 0) {
+                if (e.getClickCount() == 2 && table.rowAtPoint(e.getPoint()) >= 0
+                        && !CheckColumn.isCheckColumn(table, e)) {
                     editSelected();
                 }
             }
@@ -221,8 +223,12 @@ public class CartPanel extends JPanel {
 
     private void updateButtons() {
         boolean selected = model.getRowCount() > 0 && table.getSelectedRow() >= 0;
+        int checked = model.getCheckedCount();
         editButton.setEnabled(selected);
-        removeButton.setEnabled(selected);
+        removeButton.setEnabled(selected || checked > 0);
+        removeButton.setText(CheckColumn.removeLabel("Remove selected", checked));
+        removeButton.setToolTipText(checked > 0 ? "Remove the checked items"
+                : "Remove the selected item (tick the boxes to remove several)");
     }
 
     // ------------------------------------------------------------ actions
@@ -348,6 +354,20 @@ public class CartPanel extends JPanel {
     }
 
     private void removeSelected() {
+        List<CartItem> checked = model.getCheckedItems();
+        if (!checked.isEmpty()) {
+            List<String> names = checked.stream().map(CartItem::getName).toList();
+            int ok = JOptionPane.showConfirmDialog(this, CheckColumn.removeQuestion(names, "item", "your cart"),
+                    "Remove items", JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
+            if (ok == JOptionPane.OK_OPTION) {
+                int n = controller.removeCartItems(names);
+                message.setForeground(Theme.PRIMARY);
+                message.setText("Removed " + n + (n == 1 ? " item." : " items."));
+                refresh();
+                dataChanged.run();
+            }
+            return;
+        }
         CartItem item = selected();
         if (item == null) {
             return;
@@ -500,7 +520,7 @@ public class CartPanel extends JPanel {
             }
             setHorizontalAlignment(LEFT);
             setBorder(BorderFactory.createEmptyBorder(0, 10, 0, 10));
-            setFont(Theme.font(modelCol == 0 ? Font.BOLD : Font.PLAIN, 12f));
+            setFont(Theme.font(modelCol == CartTableModel.NAME_COLUMN ? Font.BOLD : Font.PLAIN, 12f));
             setForeground(modelCol == CartTableModel.SOURCE_COLUMN && chipBg == null ? Theme.MUTED : Theme.TEXT);
             setBackground(selected ? Theme.PRIMARY_LIGHT : Theme.CARD);
             return this;

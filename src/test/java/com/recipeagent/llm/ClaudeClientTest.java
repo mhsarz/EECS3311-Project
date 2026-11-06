@@ -151,4 +151,48 @@ class ClaudeClientTest {
         assertEquals("{}", t.getToolArgs());
         assertNull(LLMResponse.text("hi").getToolArgs());
     }
+
+    @Test
+    void attachedPdfIsSentAsADocumentBlockBeforeTheText() {
+        java.util.concurrent.atomic.AtomicReference<java.time.Duration> timeout = new java.util.concurrent.atomic.AtomicReference<>();
+        FakeApi api = new FakeApi(TEXT_REPLY) {
+            @Override
+            public JsonObject createMessage(JsonObject params, java.time.Duration t) {
+                timeout.set(t);
+                return createMessage(params);
+            }
+        };
+        ClaudeClient client = new ClaudeClient(api, "claude-test", 1000);
+        byte[] pdf = "%PDF-1.7 pages".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        LLMResponse r = client.generate("List the sale items.", List.of(), List.of(Attachment.pdf(pdf, "nf.pdf")));
+        assertEquals("Hello\nthere", r.getText());
+        assertEquals(AnthropicApi.FILE_REQUEST_TIMEOUT, timeout.get());
+
+        JsonArray content = api.lastParams.getAsJsonArray("messages").get(0).getAsJsonObject().getAsJsonArray("content");
+        assertEquals(2, content.size());
+        JsonObject doc = content.get(0).getAsJsonObject();
+        assertEquals("document", doc.get("type").getAsString());
+        JsonObject source = doc.getAsJsonObject("source");
+        assertEquals("base64", source.get("type").getAsString());
+        assertEquals("application/pdf", source.get("media_type").getAsString());
+        assertEquals(java.util.Base64.getEncoder().encodeToString(pdf), source.get("data").getAsString());
+        assertEquals("text", content.get(1).getAsJsonObject().get("type").getAsString());
+        assertEquals("List the sale items.", content.get(1).getAsJsonObject().get("text").getAsString());
+
+        // without files the content stays a plain string, as before
+        client.generate("Hi", List.of(), List.of());
+        assertEquals("Hi", api.lastParams.getAsJsonArray("messages").get(0).getAsJsonObject().get("content").getAsString());
+    }
+
+    @Test
+    void clientsThatCannotSendFilesSaySo() {
+        LLMClient plain = (p, t) -> LLMResponse.text("ok");
+        assertEquals("ok", plain.generate("hi", List.of(), List.of()).getText());
+        byte[] pdf = {'%', 'P', 'D', 'F', '-'};
+        LLMException e = assertThrows(LLMException.class,
+                () -> plain.generate("hi", List.of(), List.of(Attachment.pdf(pdf, "a.pdf"))));
+        assertTrue(e.getMessage().contains("cannot read attached files"));
+        assertThrows(IllegalArgumentException.class, () -> Attachment.pdf(new byte[0], "x.pdf"));
+        assertEquals("a.pdf (application/pdf, 5 bytes)", Attachment.pdf(pdf, "a.pdf").toString());
+    }
 }

@@ -106,6 +106,9 @@ dependency) and falls back to the system look if FlatLaf is missing. Tabs:
   "1 day · Use soon" (yellow, within 3 days) or "Expired · 2 days" (red). The Add item form has a unit
   list, a best-before date picker (a calendar that opens on click; a week ahead by default, or "No date")
   and shows mistakes inline. Select an item and click **Edit** (or double-click it) to change it.
+  To remove several items at once, tick their boxes (or the box in the header for all, or press
+  Space on a row) and click **Remove checked (N)**; it lists them and asks first. The Cart and
+  History tables have the same boxes.
 - **Recipe**: generate a recipe with the AI (time limit, portions, optional "allow ingredients I don't
   have"); Cancel while it is thinking. The recipe card shows "Uses N expiring items", "3 in pantry ·
   2 missing" and a chip for each ingredient (In pantry, Use soon, Expired, Not enough, Missing, Basic).
@@ -122,14 +125,16 @@ dependency) and falls back to the system look if FlatLaf is missing. Tabs:
   Cook This) or Chat (added by the agent). New items are checked against this week's flyers by the
   AI; items on sale show the store and price ("No Frills · $5.49") and a sale alert appears.
   **Check for sales** checks the whole cart again.
-- **History**: saved recipes, most recently cooked first. Click a star to rate (1-5) and the heart to
+- **History**: saved recipes, most recently cooked first (tick boxes to remove several). Click a star to rate (1-5) and the heart to
   make a favourite (or press 1-5 and F on the selected row); search by name or ingredient, show
   favourites only, open a recipe or remove it. The footer shows totals. Top-rated recipes are used
   as favourites when a new recipe is generated.
 - **Flyers**: tick the stores you shop at, then **Refresh flyers** (needs `FLYER_URL_TEMPLATE`) or
-  **Upload flyer…** and choose a text file with a store's flyer (copy the flyer page from the store's
-  website into a `.txt` file; saved `.html` pages work too). The AI reads the sale items and prices,
-  and the cart is checked for sales. Search and filter by store; "In your cart" shows the matches.
+  **Upload flyer…** and choose the store's flyer: a **PDF** downloaded from the store's website
+  (up to 32 MB; the AI reads every page, including prices that are only in pictures), or a `.txt`
+  file with the flyer page copied into it (saved `.html` pages work too). The AI reads the sale
+  items and prices, and the cart is checked for sales. A PDF takes longer (up to a minute) and
+  costs more tokens than text: roughly 1,500-3,000 per page plus the page image. Search and filter by store; "In your cart" shows the matches.
   The chat can answer "What's on sale at No Frills?".
 - **Profile**: your diet, allergies, dislikes and default portions, used by every recipe. Fill in the
   form (type an allergy or dislike and press Enter; click × to remove it) and click **Save profile**,
@@ -175,7 +180,7 @@ The GUI and the CLI use the same saved data (`data/`), so changes made in one sh
 | F07 Substitutes | `recipe substitute <id> buttermilk [--use 1]` |
 | F08 History | `history list [--favourites]`, `history rate <id> 4`, `history fav <id>`, `history search chicken`, `history remove <id>` |
 | F09 Chat | `chat "What can I make with chicken?"`, or `chat` for a conversation |
-| F10 Flyers | `flyers stores`, `flyers pick "No Frills" Metro`, `flyers refresh`, `flyers upload ./nofrills.txt --store "No Frills"`, `flyers list --store "No Frills"` |
+| F10 Flyers | `flyers stores`, `flyers pick "No Frills" Metro`, `flyers refresh`, `flyers upload ./nofrills.pdf --store "No Frills"` (a PDF, .txt or .html file), `flyers list --store "No Frills"` |
 | F11 Missing ingredients | `recipe check <id> [--add-missing]` |
 
 `<id>` is a recipe id from `history list` (the first 4 or more characters are enough), or `last` for
@@ -244,9 +249,10 @@ or type in the **Chat** panel.
 ## Known limitations
 
 - No unit conversion: "500 g" in a recipe is not compared with "1 kg" in the pantry.
-- There is no free, public store-flyer API, so flyers are uploaded as text or HTML files
+- There is no free, public store-flyer API, so flyers are uploaded as PDF, text or HTML files
   (`FLYER_URL_TEMPLATE` works if you have a source). The AI reads them and can make mistakes; the
-  results are shown so you can check them.
+  results are shown so you can check them. Password-protected PDFs and PDFs over 32 MB (or over
+  100 pages) cannot be read. Do not commit real store flyers to the repository.
 - Undo works within one session (one GUI run, one interactive CLI or one command file).
 - The chat can change the cart and the profile, but it can only read the pantry and the flyers.
 - The allergy check is a name match on top of the AI's own rules, so always read the ingredients.

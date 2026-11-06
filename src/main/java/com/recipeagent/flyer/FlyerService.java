@@ -158,8 +158,8 @@ public class FlyerService {
         return onlineSource;
     }
 
-    /** The flyer text for a store, from its source. */
-    public String fetchRaw(String store) throws FlyerException {
+    /** The flyer for a store (text or a PDF), from its source. */
+    public FlyerContent fetchRaw(String store) throws FlyerException {
         return getSource(store).fetch(store);
     }
 

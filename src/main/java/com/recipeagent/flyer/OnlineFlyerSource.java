@@ -11,7 +11,8 @@ import java.time.Duration;
 
 /**
  * Gets a store's flyer from the web (F10). The address comes from FLYER_URL_TEMPLATE in .env,
- * with {store} replaced by the store name, e.g. https://example.com/flyers/{store}.txt.
+ * with {store} replaced by the store name, e.g. https://example.com/flyers/{store}.pdf. The
+ * address can give plain text, a web page or a PDF.
  * Stores don't offer a common free flyer API, so this is optional: when no address is set,
  * or the page can't be reached, the user is asked to upload the flyer file instead (UC10 1a).
  */
@@ -48,17 +49,17 @@ public class OnlineFlyerSource implements FlyerSource {
     }
 
     @Override
-    public String fetch(String store) throws FlyerException {
+    public FlyerContent fetch(String store) throws FlyerException {
         String url = urlFor(store);
         if (url == null) {
             throw new FlyerException("Online flyers are not set up, so please upload the " + store
                     + " flyer as a file.", true);
         }
-        HttpResponse<String> response;
+        HttpResponse<byte[]> response;
         try {
             HttpRequest request = HttpRequest.newBuilder(URI.create(url)).timeout(TIMEOUT)
-                    .header("Accept", "text/plain, text/html").GET().build();
-            response = http.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+                    .header("Accept", "application/pdf, text/plain, text/html").GET().build();
+            response = http.send(request, HttpResponse.BodyHandlers.ofByteArray());
         } catch (IllegalArgumentException e) {
             throw new FlyerException("The online flyer address for " + store + " is not valid. "
                     + "Check FLYER_URL_TEMPLATE in .env, or upload the flyer file.", true);
@@ -73,11 +74,19 @@ public class OnlineFlyerSource implements FlyerSource {
             throw new FlyerException("The online flyer for " + store + " is not available (error "
                     + response.statusCode() + "). Upload the flyer file instead.", true);
         }
-        String text = FlyerText.clean(response.body() == null ? "" : response.body());
+        byte[] body = response.body() == null ? new byte[0] : response.body();
+        if (FileFlyerSource.isPdf(body)) {
+            if (body.length > FileFlyerSource.MAX_PDF_BYTES) {
+                throw new FlyerException("The online flyer PDF for " + store + " is too large (over 32 MB). "
+                        + "Upload the flyer file instead.", true);
+            }
+            return FileFlyerSource.pdfContent(body, store + " flyer.pdf");
+        }
+        String text = FlyerText.clean(FileFlyerSource.decode(body));
         if (text.isBlank()) {
             throw new FlyerException("The online flyer for " + store + " was empty. Upload the flyer file instead.", true);
         }
-        return text;
+        return FlyerContent.text(text);
     }
 
     @Override

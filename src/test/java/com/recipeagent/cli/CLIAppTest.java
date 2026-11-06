@@ -291,4 +291,25 @@ class CLIAppTest {
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> CLIApp.findIngredient(two, "peas"));
         assertTrue(e.getMessage().contains("Which one? green peas, frozen peas"));
     }
+
+    @Test
+    void flyersUploadTakesAPdf() throws Exception {
+        List<Integer> pdfCalls = new ArrayList<>();
+        ScriptedLLM llm = new ScriptedLLM() {
+            @Override
+            public LLMResponse generate(String prompt, List<AgentTool> tools, List<com.recipeagent.llm.Attachment> files) {
+                pdfCalls.add(files.size());
+                return generate(prompt, tools);
+            }
+        };
+        llm.text("{\"end_date\":null,\"items\":[{\"name\":\"Butter 454 g\",\"price\":4.79}]}");
+        AgentController c = controller(llm);
+        Path pdf = tmp.resolve("food basics.pdf");
+        Files.write(pdf, "%PDF-1.7 pictures of the flyer".getBytes(StandardCharsets.US_ASCII));
+        String out = run(c, "", "flyers", "upload", pdf.toString(), "--store", "Food Basics");
+        assertTrue(out.contains("Reading the Food Basics flyer (PDF, this can take a minute)..."));
+        assertTrue(out.contains("Read 1 sale item from Food Basics."));
+        assertEquals(List.of(1), pdfCalls);
+        assertTrue(CLIApp.HELP.get("flyers").contains("flyers upload ./nofrills.pdf"));
+    }
 }

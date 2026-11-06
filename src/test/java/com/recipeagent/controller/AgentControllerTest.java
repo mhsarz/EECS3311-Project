@@ -409,6 +409,32 @@ class AgentControllerTest {
     }
 
     @Test
+    void uploadFlyerSendsAPdfToTheAi() throws Exception {
+        List<List<com.recipeagent.llm.Attachment>> files = new ArrayList<>();
+        ScriptedLLM llm = new ScriptedLLM() {
+            @Override
+            public LLMResponse generate(String prompt, List<AgentTool> tools, List<com.recipeagent.llm.Attachment> f) {
+                files.add(f);
+                return generate(prompt, tools);
+            }
+        };
+        llm.replies.add(LLMResponse.text(MILK_FLYER));
+        AgentController c = controller(llm);
+        Path pdf = tmp.resolve("No Frills flyer.pdf");
+        java.nio.file.Files.write(pdf, "%PDF-1.7 two pages of pictures".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+        FlyerRefresh r = c.uploadFlyer(pdf, "No Frills");
+        assertEquals(1, files.size());
+        assertEquals("No Frills flyer.pdf", files.get(0).get(0).getName());
+        assertEquals(2, r.getUpdated().get(0).getItems().size());
+        assertTrue(llm.prompts.get(0).contains("attached PDF flyer"));
+
+        Path locked = tmp.resolve("locked.pdf");
+        java.nio.file.Files.write(locked, "%PDF-1.4 /Encrypt 3 0 R".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+        assertThrows(com.recipeagent.flyer.FlyerException.class, () -> c.uploadFlyer(locked, "Metro"));
+        assertEquals(1, files.size());                                          // nothing was sent
+    }
+
+    @Test
     void uploadFlyerReadsTheFileSavesItAndChecksTheCart() throws Exception {
         ScriptedLLM llm = new ScriptedLLM();
         llm.replies.add(LLMResponse.text(MILK_FLYER));

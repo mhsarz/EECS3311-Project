@@ -63,8 +63,28 @@ public class ClaudeClient implements LLMClient {
         return toResponse(reply);
     }
 
+    /**
+     * Sends the prompt with files (F10 PDF flyers). Each file becomes a "document" content
+     * block before the prompt text, as the Messages API recommends; Claude reads a PDF's text
+     * and a picture of each page, so flyers that are only images work too.
+     */
+    @Override
+    public LLMResponse generate(String prompt, List<AgentTool> tools, List<Attachment> files) {
+        if (files == null || files.isEmpty()) {
+            return generate(prompt, tools);
+        }
+        JsonObject params = toParams(prompt, tools, files);
+        JsonObject reply = sdk.createMessage(params, AnthropicApi.FILE_REQUEST_TIMEOUT);
+        return toResponse(reply);
+    }
+
     /** Builds the Messages API request body. */
     JsonObject toParams(String prompt, List<AgentTool> tools) {
+        return toParams(prompt, tools, List.of());
+    }
+
+    /** Builds the request body; with files, the message content is a list of blocks. */
+    JsonObject toParams(String prompt, List<AgentTool> tools, List<Attachment> files) {
         if (prompt == null || prompt.isBlank()) {
             throw new IllegalArgumentException("Prompt must not be empty");
         }
@@ -74,7 +94,26 @@ public class ClaudeClient implements LLMClient {
 
         JsonObject message = new JsonObject();
         message.addProperty("role", "user");
-        message.addProperty("content", prompt);
+        if (files == null || files.isEmpty()) {
+            message.addProperty("content", prompt);
+        } else {
+            JsonArray content = new JsonArray();
+            for (Attachment f : files) {
+                JsonObject source = new JsonObject();
+                source.addProperty("type", "base64");
+                source.addProperty("media_type", f.getMediaType());
+                source.addProperty("data", f.toBase64());
+                JsonObject doc = new JsonObject();
+                doc.addProperty("type", "document");
+                doc.add("source", source);
+                content.add(doc);
+            }
+            JsonObject text = new JsonObject();
+            text.addProperty("type", "text");
+            text.addProperty("text", prompt);
+            content.add(text);
+            message.add("content", content);
+        }
         JsonArray messages = new JsonArray();
         messages.add(message);
         params.add("messages", messages);

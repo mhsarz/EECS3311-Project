@@ -105,6 +105,34 @@ class CookPreviewTest {
     }
 
     @Test
+    void removesSeveralItemsAtOnce() {
+        AgentController c = controller();
+        List<String> ids = c.getPantryItems().stream().limit(2).map(PantryItem::getId).toList();
+        assertEquals(2, c.removePantryItems(List.of(ids.get(0), ids.get(1), "no-such-id")));
+        assertEquals(1, c.getPantryItems().size());
+        assertEquals(0, c.removePantryItems(List.of()));
+
+        c.addToCart(new com.recipeagent.model.CartItem("milk", 1));
+        c.addToCart(new com.recipeagent.model.CartItem("bread", 1));
+        c.addToCart(new com.recipeagent.model.CartItem("eggs", 12));
+        assertEquals(2, c.removeCartItems(List.of("Milk", "eggs")));
+        assertEquals(1, c.getCartItems().size());
+
+        Recipe a = new Recipe("Soup", List.of(new Ingredient("rice", 1, "kg")), List.of("Boil"), 20, 2);
+        Recipe b = new Recipe("Toast", List.of(new Ingredient("bread", 1, "")), List.of("Toast"), 5, 1);
+        c.saveRecipe(a);
+        c.saveRecipe(b);
+        assertEquals(2, c.removeRecipes(List.of(a.getId(), b.getId())));
+        assertTrue(c.getHistory().isEmpty());
+
+        // saved to disk: a new controller on the same folder sees the same data
+        AgentController again = new AgentController(null, 100, new JsonStorage(tmp), CLOCK);
+        assertEquals(1, again.getPantryItems().size());
+        assertEquals(1, again.getCartItems().size());
+        assertTrue(again.getHistory().isEmpty());
+    }
+
+    @Test
     void amountsAreShort() {
         assertEquals("2 kg", CookPreview.amount(2.0, "kg"));
         assertEquals("0.33 L", CookPreview.amount(1 / 3.0, "L"));

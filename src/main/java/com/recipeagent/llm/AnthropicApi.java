@@ -28,6 +28,8 @@ public class AnthropicApi {
     public static final URI DEFAULT_ENDPOINT = URI.create("https://api.anthropic.com/v1/messages");
     public static final String API_VERSION = "2023-06-01";
     static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(90);
+    /** A request with a PDF takes longer to upload and read. */
+    public static final Duration FILE_REQUEST_TIMEOUT = Duration.ofSeconds(240);
     /** Longest wait before the one retry, even if the API asks for longer. */
     static final Duration MAX_RETRY_WAIT = Duration.ofSeconds(10);
 
@@ -61,7 +63,12 @@ public class AnthropicApi {
      * @throws LLMException if the API cannot be reached or returns an error
      */
     public JsonObject createMessage(JsonObject params) {
-        HttpRequest request = buildRequest(params);
+        return createMessage(params, REQUEST_TIMEOUT);
+    }
+
+    /** Sends a request that may take longer, such as one with a PDF. */
+    public JsonObject createMessage(JsonObject params, Duration timeout) {
+        HttpRequest request = buildRequest(params, timeout);
         HttpResponse<String> response = send(request);
         if (isTemporary(response.statusCode())) {
             // Rate limit, overloaded or a server error: wait a moment and try once more.
@@ -118,11 +125,15 @@ public class AnthropicApi {
     }
 
     HttpRequest buildRequest(JsonObject params) {
+        return buildRequest(params, REQUEST_TIMEOUT);
+    }
+
+    HttpRequest buildRequest(JsonObject params, Duration timeout) {
         if (params == null) {
             throw new IllegalArgumentException("Request parameters must not be null");
         }
         return HttpRequest.newBuilder(endpoint)
-                .timeout(REQUEST_TIMEOUT)
+                .timeout(timeout == null ? REQUEST_TIMEOUT : timeout)
                 .header("x-api-key", apiKey)
                 .header("anthropic-version", API_VERSION)
                 .header("content-type", "application/json")

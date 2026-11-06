@@ -57,10 +57,11 @@ class GuiLogicTest {
                 new PantryItem("cheese", 1, "", StorageLocation.FRIDGE, today.plusDays(9))), today);
 
         assertEquals(4, model.getRowCount());
-        assertEquals(6, model.getColumnCount());
-        assertEquals("Qty", model.getColumnName(1));
-        assertEquals("milk", model.getValueAt(0, 0));
-        assertEquals("Fridge", model.getValueAt(0, 3));
+        assertEquals(7, model.getColumnCount());
+        assertEquals("Qty", model.getColumnName(PantryTableModel.QTY_COLUMN));
+        assertEquals("", model.getColumnName(PantryTableModel.CHECK_COLUMN));
+        assertEquals("milk", model.getValueAt(0, PantryTableModel.NAME_COLUMN));
+        assertEquals("Fridge", model.getValueAt(0, PantryTableModel.LOCATION_COLUMN));
         assertEquals(LocalDate.of(2026, 11, 5), model.getValueAt(0, PantryTableModel.BEST_BEFORE_COLUMN));
         assertEquals(2, model.getValueAt(0, PantryTableModel.DAYS_LEFT_COLUMN));
         assertNull(model.getValueAt(1, PantryTableModel.DAYS_LEFT_COLUMN));
@@ -206,8 +207,8 @@ class GuiLogicTest {
         CartTableModel m = new CartTableModel();
         m.setItems(List.of(milk, eggs));
         assertEquals(2, m.getRowCount());
-        assertEquals("milk", m.getValueAt(0, 0));
-        assertEquals("L", m.getValueAt(0, 2));
+        assertEquals("milk", m.getValueAt(0, CartTableModel.NAME_COLUMN));
+        assertEquals("L", m.getValueAt(0, CartTableModel.UNIT_COLUMN));
         assertEquals(com.recipeagent.model.CartSource.CHAT, m.getValueAt(0, CartTableModel.SOURCE_COLUMN));
         assertEquals(com.recipeagent.model.CartSource.MANUAL, m.getValueAt(1, CartTableModel.SOURCE_COLUMN));
         assertEquals("On sale", m.getValueAt(1, CartTableModel.SALE_COLUMN));        // store not known
@@ -414,5 +415,71 @@ class GuiLogicTest {
                 CartPanel.removeQuestion(new com.recipeagent.model.CartItem("milk", 2, "L", com.recipeagent.model.CartSource.MANUAL)));
         assertEquals("Are you sure you want to remove eggs (12) from your cart?",
                 CartPanel.removeQuestion(new com.recipeagent.model.CartItem("eggs", 12)));
+    }
+
+    @Test
+    void checkBoxesInPantryCartAndHistory() {
+        LocalDate today = LocalDate.of(2026, 11, 6);
+        PantryItem milk = new PantryItem("milk", 1, "L", StorageLocation.FRIDGE, today.plusDays(2));
+        PantryItem rice = new PantryItem("rice", 2, "kg", StorageLocation.PANTRY, null);
+        PantryItem eggs = new PantryItem("eggs", 6, "", StorageLocation.FRIDGE, null);
+        PantryTableModel p = new PantryTableModel();
+        p.setItems(List.of(milk, rice, eggs), today);
+        assertEquals(Boolean.class, p.getColumnClass(PantryTableModel.CHECK_COLUMN));
+        assertEquals(Boolean.FALSE, p.getValueAt(0, PantryTableModel.CHECK_COLUMN));
+        p.setRowChecked(2, true);
+        p.setRowChecked(0, true);
+        assertEquals(Boolean.TRUE, p.getValueAt(0, PantryTableModel.CHECK_COLUMN));
+        assertEquals(2, p.getCheckedCount());
+        assertEquals(List.of(milk, eggs), p.getCheckedItems());               // table order
+        p.setItems(List.of(milk, rice), today);                               // eggs removed elsewhere
+        assertEquals(List.of(milk), p.getCheckedItems());
+        assertFalse(CheckColumn.allChecked(p));
+        p.setAllChecked(true);
+        assertTrue(CheckColumn.allChecked(p));
+        p.setAllChecked(false);
+        assertEquals(0, p.getCheckedCount());
+
+        CartTableModel c = new CartTableModel();
+        com.recipeagent.model.CartItem bread = new com.recipeagent.model.CartItem("Bread", 1);
+        c.setItems(List.of(bread, new com.recipeagent.model.CartItem("milk", 2)));
+        c.setRowChecked(0, true);
+        c.setItems(List.of(new com.recipeagent.model.CartItem("bread", 2), new com.recipeagent.model.CartItem("milk", 2)));
+        assertTrue(c.isRowChecked(0));                                        // kept by name, any case
+        assertEquals(1, c.getCheckedItems().size());
+
+        com.recipeagent.model.Recipe a = new com.recipeagent.model.Recipe("Soup",
+                List.of(new com.recipeagent.model.Ingredient("rice", 1, "")), List.of("Cook"), 30, 2);
+        com.recipeagent.model.Recipe b = new com.recipeagent.model.Recipe("Toast",
+                List.of(new com.recipeagent.model.Ingredient("bread", 1, "")), List.of("Toast"), 5, 1);
+        HistoryTableModel h = new HistoryTableModel();
+        h.setRecipes(List.of(a, b));
+        h.setAllChecked(true);
+        assertEquals(2, h.getCheckedRecipes().size());
+        h.setRecipes(List.of(a));                                             // Toast hidden by a search
+        assertEquals(List.of(a), h.getCheckedRecipes());
+        assertEquals(Boolean.class, h.getColumnClass(HistoryTableModel.CHECK_COLUMN));
+        assertEquals("Soup", h.getValueAt(0, HistoryTableModel.TITLE_COLUMN));
+
+        assertFalse(CheckColumn.allChecked(new PantryTableModel()));          // empty table
+        assertEquals("Remove selected", CheckColumn.removeLabel("Remove selected", 0));
+        assertEquals("Remove checked (3)", CheckColumn.removeLabel("Remove", 3));
+        assertEquals("Are you sure you want to remove this item from your cart?\n\nmilk",
+                CheckColumn.removeQuestion(List.of("milk"), "item", "your cart"));
+        assertEquals("Are you sure you want to remove these 2 recipes from your history?\n\nSoup, Toast",
+                CheckColumn.removeQuestion(List.of("Soup", "Toast"), "recipe", "your history"));
+        List<String> many = List.of("a", "b", "c", "d", "e", "f", "g", "h", "i", "j");
+        assertTrue(CheckColumn.removeQuestion(many, "item", "your pantry")
+                .endsWith("a, b, c, d, e, f, g, h and 2 more"));
+    }
+
+    @Test
+    void flyerUploadAcceptsPdfs() {
+        assertEquals("pdf", FlyersPanel.CHOOSER_EXTENSIONS[0]);
+        assertTrue(FlyersPanel.CHOOSER_FILTER.contains(".pdf"));
+        assertEquals("Reading the Metro flyer (PDF, this can take a minute)…", FlyersPanel.readingText("Metro", "Metro Week 45.PDF"));
+        assertEquals("Reading the Metro flyer…", FlyersPanel.readingText("Metro", "metro.txt"));
+        assertEquals("Food Basics", FlyersPanel.guessStore("sample-flyer-food-basics.pdf",
+                com.recipeagent.flyer.FlyerService.DEFAULT_STORES));
     }
 }

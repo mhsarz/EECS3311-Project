@@ -209,8 +209,8 @@ public class FlyersPanel extends JPanel {
         box.setLayout(new BoxLayout(box, BoxLayout.Y_AXIS));
         JLabel title = Theme.label("No flyers yet", Font.BOLD, 15f, Theme.TEXT);
         JLabel text = Theme.muted("<html><div style='text-align:center;width:330px'>Pick your stores and click "
-                + "Refresh flyers, or click Upload flyer and choose a text file with the store's flyer "
-                + "(copy the flyer page from the store's website into a .txt file).</div></html>");
+                + "Refresh flyers, or click Upload flyer and choose the store's flyer: the PDF from its "
+                + "website, or a text file with the flyer page copied into it.</div></html>");
         text.setHorizontalAlignment(SwingConstants.CENTER);
         for (JComponent c : new JComponent[]{title, text}) {
             c.setAlignmentX(CENTER_ALIGNMENT);
@@ -325,7 +325,7 @@ public class FlyersPanel extends JPanel {
     private void uploadFlyer() {
         JFileChooser chooser = new JFileChooser();
         chooser.setDialogTitle("Upload a store's flyer");
-        chooser.setFileFilter(new FileNameExtensionFilter("Flyer text (.txt, .html, .csv, .md)", "txt", "html", "htm", "csv", "md"));
+        chooser.setFileFilter(new FileNameExtensionFilter(CHOOSER_FILTER, CHOOSER_EXTENSIONS));
         if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) {
             return;
         }
@@ -335,7 +335,7 @@ public class FlyersPanel extends JPanel {
             return;
         }
         Path path = file.toPath();
-        Background.run(b -> setBusy(b, "Reading the " + store + " flyer…"),
+        Background.run(b -> setBusy(b, readingText(store, file.getName())),
                 () -> {
                     try {
                         return controller.uploadFlyer(path, store);
@@ -431,6 +431,15 @@ public class FlyersPanel extends JPanel {
             sb.append(p.getKey()).append(": ").append(p.getValue());
         }
         return sb.length() == 0 ? "Nothing was read." : sb.toString();
+    }
+
+    static final String CHOOSER_FILTER = "Flyers (.pdf, .txt, .html, .csv, .md)";
+    static final String[] CHOOSER_EXTENSIONS = {"pdf", "txt", "html", "htm", "csv", "md"};
+
+    /** "Reading the Metro flyer…", with a note that a PDF takes longer. */
+    static String readingText(String store, String fileName) {
+        boolean pdf = fileName != null && fileName.toLowerCase(java.util.Locale.ROOT).endsWith(".pdf");
+        return "Reading the " + store + " flyer" + (pdf ? " (PDF, this can take a minute)…" : "…");
     }
 
     /** A store whose name appears in the file name, e.g. "nofrills-week45.txt" gives "No Frills". */

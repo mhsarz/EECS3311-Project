@@ -40,6 +40,7 @@ import java.awt.Window;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -119,11 +120,13 @@ public class PantryPanel extends JPanel {
         table.setDefaultRenderer(Double.class, renderer);
         table.setDefaultRenderer(Integer.class, renderer);
         table.setDefaultRenderer(LocalDate.class, renderer);
+        CheckColumn.install(table, model, this::updateButtons);
         table.getSelectionModel().addListSelectionListener(e -> updateButtons());
         table.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
-                if (e.getClickCount() == 2 && table.rowAtPoint(e.getPoint()) >= 0) {
+                if (e.getClickCount() == 2 && table.rowAtPoint(e.getPoint()) >= 0
+                        && !CheckColumn.isCheckColumn(table, e)) {
                     editSelected();
                 }
             }
@@ -246,8 +249,12 @@ public class PantryPanel extends JPanel {
 
     private void updateButtons() {
         boolean selected = model.getRowCount() > 0 && table.getSelectedRow() >= 0;
+        int checked = model.getCheckedCount();
         editButton.setEnabled(selected);
-        removeButton.setEnabled(selected);
+        removeButton.setEnabled(selected || checked > 0);
+        removeButton.setText(CheckColumn.removeLabel("Remove selected", checked));
+        removeButton.setToolTipText(checked > 0 ? "Remove the checked items"
+                : "Remove the selected item (tick the boxes to remove several)");
     }
 
     // ------------------------------------------------------------ actions
@@ -460,6 +467,17 @@ public class PantryPanel extends JPanel {
     }
 
     private void removeSelected() {
+        List<PantryItem> checked = model.getCheckedItems();
+        if (!checked.isEmpty()) {
+            int ok = JOptionPane.showConfirmDialog(this, CheckColumn.removeQuestion(
+                    checked.stream().map(PantryItem::getName).toList(), "item", "your pantry"),
+                    "Remove items", JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
+            if (ok == JOptionPane.OK_OPTION) {
+                controller.removePantryItems(checked.stream().map(PantryItem::getId).toList());
+                refresh();
+            }
+            return;
+        }
         int viewRow = table.getSelectedRow();
         if (viewRow < 0) {
             return;
@@ -575,7 +593,7 @@ public class PantryPanel extends JPanel {
             super.getTableCellRendererComponent(t, shown, selected, false, row, column);
             setHorizontalAlignment(LEFT);
             setBorder(BorderFactory.createEmptyBorder(0, 10, 0, 10));
-            setFont(Theme.font(modelCol == 0 ? Font.BOLD : Font.PLAIN, 12f));
+            setFont(Theme.font(modelCol == PantryTableModel.NAME_COLUMN ? Font.BOLD : Font.PLAIN, 12f));
 
             PantryTableModel.Status status = model.getStatusAt(modelRow);
             chipBg = null;

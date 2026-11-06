@@ -187,6 +187,7 @@ public class HistoryPanel extends JPanel {
         TableColumn rating = table.getColumnModel().getColumn(HistoryTableModel.RATING_COLUMN);
         rating.setMinWidth(STAR_LEFT + 5 * STAR_STEP + 10);
         table.getColumnModel().getColumn(HistoryTableModel.TITLE_COLUMN).setPreferredWidth(260);
+        CheckColumn.install(table, model, this::updateButtons);
         table.getSelectionModel().addListSelectionListener(e -> updateButtons());
 
         MouseAdapter mouse = new MouseAdapter() {
@@ -198,7 +199,7 @@ public class HistoryPanel extends JPanel {
             @Override
             public void mouseMoved(MouseEvent e) {
                 int col = table.convertColumnIndexToModel(table.columnAtPoint(e.getPoint()));
-                boolean hand = col == HistoryTableModel.FAV_COLUMN
+                boolean hand = col == HistoryTableModel.FAV_COLUMN || col == HistoryTableModel.CHECK_COLUMN
                         || col == HistoryTableModel.RATING_COLUMN && starAt(xInCell(e)) > 0;
                 table.setCursor(Cursor.getPredefinedCursor(hand ? Cursor.HAND_CURSOR : Cursor.DEFAULT_CURSOR));
             }
@@ -301,8 +302,12 @@ public class HistoryPanel extends JPanel {
 
     private void updateButtons() {
         boolean selected = table.getSelectedRow() >= 0 && model.getRowCount() > 0;
+        int checked = model.getCheckedCount();
         openButton.setEnabled(selected);
-        removeButton.setEnabled(selected);
+        removeButton.setEnabled(selected || checked > 0);
+        removeButton.setText(CheckColumn.removeLabel("Remove", checked));
+        removeButton.setToolTipText(checked > 0 ? "Remove the checked recipes"
+                : "Remove the selected recipe (tick the boxes to remove several)");
     }
 
     // ------------------------------------------------------------ actions
@@ -323,7 +328,7 @@ public class HistoryPanel extends JPanel {
                 controller.rateRecipe(r.getId(), stars);
                 changed(r);
             }
-        } else if (e.getClickCount() == 2) {
+        } else if (e.getClickCount() == 2 && col != HistoryTableModel.CHECK_COLUMN) {
             openRecipe.accept(r);
         }
     }
@@ -368,6 +373,21 @@ public class HistoryPanel extends JPanel {
     }
 
     private void removeSelected() {
+        List<Recipe> checked = model.getCheckedRecipes();
+        if (!checked.isEmpty()) {
+            int ok = JOptionPane.showConfirmDialog(this, CheckColumn.removeQuestion(
+                    checked.stream().map(Recipe::getTitle).toList(), "recipe", "your history")
+                    + (checked.size() == 1 ? "\n\nIts rating and cook record are removed too."
+                    : "\n\nTheir ratings and cook records are removed too."),
+                    "Remove recipes", JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
+            if (ok == JOptionPane.OK_OPTION) {
+                controller.removeRecipes(checked.stream().map(Recipe::getId).toList());
+                table.clearSelection();
+                dataChanged.run();
+                refresh();
+            }
+            return;
+        }
         Recipe r = selectedOrNull();
         if (r == null) {
             return;

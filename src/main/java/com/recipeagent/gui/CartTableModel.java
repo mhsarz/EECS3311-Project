@@ -8,22 +8,64 @@ import java.util.ArrayList;
 import java.util.List;
 
 /** Table data for the Cart tab: one row per item to buy (F02). */
-public class CartTableModel extends AbstractTableModel {
+public class CartTableModel extends AbstractTableModel implements CheckColumn.Model {
 
     private static final long serialVersionUID = 1L;
-    static final String[] COLUMNS = {"Item", "Qty", "Unit", "Added from", "On sale"};
-    public static final int QTY_COLUMN = 1;
-    public static final int SOURCE_COLUMN = 3;
-    public static final int SALE_COLUMN = 4;
+    static final String[] COLUMNS = {"", "Item", "Qty", "Unit", "Added from", "On sale"};
+    public static final int CHECK_COLUMN = CheckColumn.COLUMN;
+    public static final int NAME_COLUMN = 1;
+    public static final int QTY_COLUMN = 2;
+    public static final int UNIT_COLUMN = 3;
+    public static final int SOURCE_COLUMN = 4;
+    public static final int SALE_COLUMN = 5;
 
     private final transient List<CartItem> rows = new ArrayList<>();
+    /** Checked items, by lower-case name (cart names are unique ignoring case). */
+    private final transient CheckColumn.Keys<String> checked = new CheckColumn.Keys<>();
 
+    /** Replaces the rows; checks are kept for items that are still there. */
     public void setItems(List<CartItem> items) {
         rows.clear();
         if (items != null) {
             rows.addAll(items);
         }
+        checked.retain(rows.stream().map(CartTableModel::key).toList());
         fireTableDataChanged();
+    }
+
+    private static String key(CartItem i) {
+        return i.getName().toLowerCase(java.util.Locale.ROOT);
+    }
+
+    @Override
+    public boolean isRowChecked(int row) {
+        return checked.contains(key(rows.get(row)));
+    }
+
+    @Override
+    public void setRowChecked(int row, boolean on) {
+        checked.set(key(rows.get(row)), on);
+        fireTableCellUpdated(row, CHECK_COLUMN);
+    }
+
+    @Override
+    public int getCheckedCount() {
+        return checked.size();
+    }
+
+    @Override
+    public void setAllChecked(boolean on) {
+        for (CartItem i : rows) {
+            checked.set(key(i), on);
+        }
+        if (!rows.isEmpty()) {
+            fireTableRowsUpdated(0, rows.size() - 1);       // keeps the selected row
+        }
+    }
+
+    /** The checked items, in table order. */
+    public List<CartItem> getCheckedItems() {
+        return rows.stream().filter(i -> checked.contains(key(i))).toList();
     }
 
     public CartItem getItemAt(int row) {
@@ -78,6 +120,8 @@ public class CartTableModel extends AbstractTableModel {
                 return CartSource.class;
             case SALE_COLUMN:
                 return String.class;
+            case CHECK_COLUMN:
+                return Boolean.class;
             default:
                 return String.class;
         }
@@ -87,11 +131,13 @@ public class CartTableModel extends AbstractTableModel {
     public Object getValueAt(int row, int column) {
         CartItem i = rows.get(row);
         switch (column) {
-            case 0:
+            case CHECK_COLUMN:
+                return checked.contains(key(i));
+            case NAME_COLUMN:
                 return i.getName();
             case QTY_COLUMN:
                 return i.getQuantity();
-            case 2:
+            case UNIT_COLUMN:
                 return i.getUnit();
             case SOURCE_COLUMN:
                 return i.getSource();

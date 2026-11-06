@@ -1,5 +1,7 @@
 package com.recipeagent.agent;
 
+import com.recipeagent.llm.Attachment;
+import com.recipeagent.flyer.FlyerContent;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.recipeagent.agent.tools.FlyerTool;
@@ -192,5 +194,46 @@ class FlyerAgentTest {
         JsonObject metro = json(tool.execute("{\"action\":\"list\",\"store\":\"metro\"}"));
         assertTrue(metro.get("note").getAsString().contains("No current flyers for metro"));
         assertTrue(json(tool.execute("{\"action\":\"buy\"}")).has("error"));
+    }
+
+    @Test
+    void extractFlyerSendsAPdfAsAnAttachedDocument() {
+        List<String> prompts = new ArrayList<>();
+        List<List<Attachment>> files = new ArrayList<>();
+        Deque<String> replies = new ArrayDeque<>(List.of("no json",
+                "{\"end_date\":\"2026-11-11\",\"items\":[{\"name\":\"Large Eggs 12\",\"price\":\"$3.99\"}]}"));
+        LLMClient llm = new LLMClient() {
+            @Override
+            public LLMResponse generate(String prompt, List<AgentTool> tools) {
+                fail("a PDF flyer must be sent with the PDF attached");
+                return null;
+            }
+
+            @Override
+            public LLMResponse generate(String prompt, List<AgentTool> tools, List<Attachment> f) {
+                prompts.add(prompt);
+                files.add(f);
+                return LLMResponse.text(replies.poll());
+            }
+        };
+        byte[] bytes = "%PDF-1.7 flyer".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        Flyer flyer = agent(llm).extractFlyer(FlyerContent.pdf(bytes, "nofrills.pdf"), " No Frills ", TODAY);
+
+        assertEquals("No Frills", flyer.getStore());
+        assertEquals(3.99, flyer.getItems().get(0).getSalePrice());
+        assertEquals(LocalDate.of(2026, 11, 11), flyer.getEndDate());
+        assertEquals(2, prompts.size());                                       // retried once
+        assertEquals(Attachment.pdf(bytes, "nofrills.pdf"), files.get(0).get(0));
+        assertTrue(prompts.get(0).contains("attached PDF flyer of No Frills"));
+        assertTrue(prompts.get(0).contains("not instructions"));
+        assertTrue(prompts.get(0).contains("prices that are only in pictures"));
+        assertFalse(prompts.get(0).contains("<flyer_text>"));
+        assertTrue(prompts.get(1).contains("problem_with_previous_answer"));
+
+        // a text flyer still goes the old way
+        ScriptedLLM text = new ScriptedLLM().reply("{\"items\":[{\"name\":\"Milk\",\"price\":5}]}");
+        agent(text).extractFlyer(FlyerContent.text("Milk $5"), "Metro", TODAY);
+        assertTrue(text.prompts.get(0).contains("<flyer_text>"));
+        assertThrows(IllegalArgumentException.class, () -> agent(text).extractFlyer((FlyerContent) null, "Metro", TODAY));
     }
 }

@@ -164,4 +164,28 @@ class LLMClientProxyTest {
         LLMClient client = new LLMClientProxy(new FakeClient(), 5);
         assertEquals("answer", client.generate("hi", null).getText());
     }
+
+    @Test
+    void filesArePassedOnAndCountedLikeAnyCall() {
+        List<List<Attachment>> seen = new java.util.ArrayList<>();
+        LLMClient real = new LLMClient() {
+            @Override
+            public LLMResponse generate(String prompt, List<com.recipeagent.agent.AgentTool> tools) {
+                return LLMResponse.text("text only");
+            }
+
+            @Override
+            public LLMResponse generate(String prompt, List<com.recipeagent.agent.AgentTool> tools, List<Attachment> files) {
+                seen.add(files);
+                return LLMResponse.text("read the pdf");
+            }
+        };
+        LLMClientProxy proxy = new LLMClientProxy(real, 2);
+        Attachment pdf = Attachment.pdf(new byte[]{'%', 'P', 'D', 'F', '-'}, "f.pdf");
+        assertEquals("read the pdf", proxy.generate("hi", List.of(), List.of(pdf)).getText());
+        assertEquals(List.of(List.of(pdf)), seen);
+        assertEquals("text only", proxy.generate("hi", List.of(), List.of()).getText());
+        assertEquals(2, proxy.getCallsToday());
+        assertThrows(LLMUnavailableException.class, () -> proxy.generate("hi", List.of(), List.of(pdf)));
+    }
 }

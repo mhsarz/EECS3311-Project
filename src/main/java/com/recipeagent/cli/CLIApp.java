@@ -197,7 +197,7 @@ public class CLIApp implements NotificationListener {
                     "flyers pick \"No Frills\" Metro   pick stores (new names are added)",
                     "flyers unpick Metro",
                     "flyers refresh                  read the picked stores' flyers (F10)",
-                    "flyers upload ./nofrills.txt --store \"No Frills\"",
+                    "flyers upload ./nofrills.pdf --store \"No Frills\"   a PDF from the store, or a .txt/.html file",
                     "flyers list [--store \"No Frills\"] [--search chicken]"),
             "history", String.join(System.lineSeparator(),
                     "history list [--favourites]",
@@ -693,12 +693,13 @@ public class CLIApp implements NotificationListener {
 
     private boolean flyersUpload(CommandLine cmd) {
         checkOptions(cmd, "store");
-        String file = need(cmd.rest(2), "Which file? e.g. flyers upload ./nofrills.txt --store \"No Frills\"");
+        String file = need(cmd.rest(2), "Which file? e.g. flyers upload ./nofrills.pdf --store \"No Frills\"");
         String store = cmd.option("store", "").trim();
         if (store.isEmpty()) {
             return error("Which store is it from? Add --store, e.g. --store \"No Frills\"");
         }
-        out.println("Reading the " + store + " flyer...");
+        boolean pdf = file.toLowerCase(Locale.ROOT).endsWith(".pdf");
+        out.println("Reading the " + store + " flyer" + (pdf ? " (PDF, this can take a minute)..." : "..."));
         try {
             printRefresh(controller.uploadFlyer(Path.of(file), store));
             return true;
@@ -729,7 +730,7 @@ public class CLIApp implements NotificationListener {
         String word = cmd.option("search", "").toLowerCase(Locale.ROOT).trim();
         List<Flyer> flyers = controller.getCurrentFlyers();
         if (flyers.isEmpty()) {
-            return say("No flyers for this week yet. Upload one with: flyers upload ./nofrills.txt --store \"No Frills\"");
+            return say("No flyers for this week yet. Upload one with: flyers upload ./nofrills.pdf --store \"No Frills\"");
         }
         TextTable t = new TextTable("Store", "Item", "Price", "Ends", "In your cart");
         for (Flyer f : flyers) {

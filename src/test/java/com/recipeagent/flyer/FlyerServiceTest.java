@@ -17,8 +17,8 @@ class FlyerServiceTest {
     private static FlyerSource fixed(String text) {
         return new FlyerSource() {
             @Override
-            public String fetch(String store) {
-                return text + " for " + store;
+            public FlyerContent fetch(String store) {
+                return FlyerContent.text(text + " for " + store);
             }
 
             @Override
@@ -59,11 +59,11 @@ class FlyerServiceTest {
     @Test
     void eachStoreUsesTheOnlineSourceUnlessAFileWasUploaded() throws Exception {
         FlyerService s = new FlyerService(fixed("online"));
-        assertEquals("online for Metro", s.fetchRaw("Metro"));
+        assertEquals("online for Metro", s.fetchRaw("Metro").getText());
         FileFlyerSource file = new FileFlyerSource(Path.of("nofrills.txt"));
         s.setSource("No Frills", file);
         assertSame(file, s.getSource("no frills"));
-        assertEquals("online for Metro", s.fetchRaw("Metro"));
+        assertEquals("online for Metro", s.fetchRaw("Metro").getText());
         assertThrows(IllegalArgumentException.class, () -> s.setSource("Costco", file));
     }
 

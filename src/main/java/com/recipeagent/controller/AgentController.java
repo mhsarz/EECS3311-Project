@@ -12,6 +12,7 @@ import com.recipeagent.command.CommandHistory;
 import com.recipeagent.command.CookRecipeCommand;
 import com.recipeagent.config.AppConfig;
 import com.recipeagent.flyer.FileFlyerSource;
+import com.recipeagent.flyer.FlyerContent;
 import com.recipeagent.flyer.FlyerException;
 import com.recipeagent.flyer.FlyerService;
 import com.recipeagent.flyer.FlyerSource;
@@ -195,6 +196,20 @@ public class AgentController {
     public boolean removePantryItem(String id) {
         boolean removed = pantry.removeItem(id);
         if (removed) {
+            savePantry();
+        }
+        return removed;
+    }
+
+    /** Removes several pantry items at once (the checked rows); saves once. Returns how many were removed. */
+    public int removePantryItems(Collection<String> ids) {
+        int removed = 0;
+        for (String id : ids) {
+            if (pantry.removeItem(id)) {
+                removed++;
+            }
+        }
+        if (removed > 0) {
             savePantry();
         }
         return removed;
@@ -648,6 +663,20 @@ public class AgentController {
         return removed;
     }
 
+    /** Removes several cart items at once (the checked rows); saves once. Returns how many were removed. */
+    public int removeCartItems(Collection<String> names) {
+        int removed = 0;
+        for (String name : names) {
+            if (cart.remove(name)) {
+                removed++;
+            }
+        }
+        if (removed > 0) {
+            saveCart();
+        }
+        return removed;
+    }
+
     /** Changes the quantity and unit of a cart item (F02 Edit). */
     public CartItem updateCartItem(String name, double quantity, String unit) {
         CartItem item = cart.update(name, quantity, unit);
@@ -712,9 +741,11 @@ public class AgentController {
 
     /**
      * Upload Flyer (F10): reads a flyer file for a store (added to the list if new), asks the
-     * agent for its sale items, saves the flyer and checks the cart for sales (F02).
+     * agent for its sale items, saves the flyer and checks the cart for sales (F02). The file
+     * can be a PDF from the store's website, a .txt file or a saved web page.
      *
-     * @throws FlyerException          if the file can't be used (missing, empty, not text)
+     * @throws FlyerException          if the file can't be used (missing, empty, too large,
+     *                                 password-protected, or not text or PDF)
      * @throws LLMUnavailableException if the AI is unavailable (the old flyer is kept)
      * @throws LLMException            if the AI could not read the flyer
      */
@@ -722,8 +753,8 @@ public class AgentController {
         String name = flyers.addStore(store);
         flyers.setSource(name, new FileFlyerSource(file));
         saveFlyers();
-        String raw = flyers.fetchRaw(name);
-        Flyer flyer = agent.extractFlyer(raw, name, today());
+        FlyerContent content = flyers.fetchRaw(name);           // text, or a PDF the AI reads itself
+        Flyer flyer = agent.extractFlyer(content, name, today());
         flyers.save(flyer);
         saveFlyers();
         clearEndedSales();
@@ -787,6 +818,20 @@ public class AgentController {
     public boolean removeRecipe(String id) {
         boolean removed = history.remove(id);
         if (removed) {
+            saveHistory();
+        }
+        return removed;
+    }
+
+    /** Removes several recipes from the history at once (the checked rows); saves once. */
+    public int removeRecipes(Collection<String> ids) {
+        int removed = 0;
+        for (String id : ids) {
+            if (history.remove(id)) {
+                removed++;
+            }
+        }
+        if (removed > 0) {
             saveHistory();
         }
         return removed;
