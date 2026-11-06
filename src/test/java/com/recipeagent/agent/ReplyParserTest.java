@@ -1,6 +1,7 @@
 package com.recipeagent.agent;
 
 import com.google.gson.JsonObject;
+import com.recipeagent.llm.LLMResponse;
 import com.recipeagent.model.Recipe;
 import org.junit.jupiter.api.Test;
 
@@ -16,9 +17,22 @@ class ReplyParserTest {
 
     @Test
     void rejectsRepliesWithoutValidJson() {
-        assertThrows(ReplyParser.ReplyException.class, () -> ReplyParser.extractJson(null));
+        assertThrows(ReplyParser.ReplyException.class, () -> ReplyParser.extractJson((String) null));
         assertThrows(ReplyParser.ReplyException.class, () -> ReplyParser.extractJson("no json here"));
         assertThrows(ReplyParser.ReplyException.class, () -> ReplyParser.extractJson("{\"a\": }"));
+    }
+
+    @Test
+    void cutOffReplySaysItWasTooLong() throws Exception {
+        LLMResponse cut = new LLMResponse("{\"title\": \"Sou", null, null, "max_tokens", 10, 8000);
+        ReplyParser.ReplyException e = assertThrows(ReplyParser.ReplyException.class,
+                () -> ReplyParser.extractJson(cut));
+        assertTrue(e.getMessage().contains("cut off"));
+        LLMResponse bad = new LLMResponse("no json", null, null, "end_turn", 10, 5);
+        e = assertThrows(ReplyParser.ReplyException.class, () -> ReplyParser.extractJson(bad));
+        assertFalse(e.getMessage().contains("cut off"));
+        LLMResponse ok = new LLMResponse("{\"a\": 1}", null, null, "max_tokens", 10, 5);
+        assertEquals(1, ReplyParser.extractJson(ok).get("a").getAsInt());
     }
 
     @Test

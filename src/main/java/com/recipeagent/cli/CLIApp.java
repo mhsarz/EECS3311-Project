@@ -33,6 +33,10 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -50,6 +54,7 @@ import java.util.Optional;
  * <pre>
  *   cli                      interactive shell (type commands; "help" lists them)
  *   cli pantry list          one command, then exit
+ *   cli run demo.txt         the commands in a file, one per line (lines starting with # are notes)
  * </pre>
  * It subscribes to the NotificationCenter (Singleton), so expiry and sale alerts are printed
  * as "[ALERT] ..." lines, as in the GUI's Alerts strip. Undo and the profile questions work
@@ -64,6 +69,8 @@ public class CLIApp implements NotificationListener {
     private final BufferedReader in;
     private final PrintStream out;
     private boolean interactive;
+    /** True while the commands of a file are running ("run <file>"). */
+    private boolean runningFile;
     /** The recipe shown last ("last" in commands); may not be saved yet. */
     private Recipe lastRecipe;
 
@@ -149,6 +156,8 @@ public class CLIApp implements NotificationListener {
                     return chat(cmd);
                 case "status":
                     return status();
+                case "run":
+                    return runFile(cmd);
                 default:
                     return error("Unknown command '" + cmd.rest(0) + "'. Type help to see the commands.");
             }
@@ -165,7 +174,7 @@ public class CLIApp implements NotificationListener {
 
     static final Map<String, String> HELP = Map.of(
             "pantry", String.join(System.lineSeparator(),
-                    "pantry add <name> [--qty 2] [--unit kg] [--location pantry|fridge|freezer] [--expires 2027-03-01] [--merge]",
+                    "pantry add <name> [--qty 2] [--unit kg] [--location pantry|fridge|freezer] [--expires 2027-03-01|+3] [--merge]",
                     "pantry list",
                     "pantry edit <name> [--name new] [--qty 3] [--unit L] [--location fridge] [--expires 2026-11-20|none]",
                     "pantry remove <name>",
@@ -218,8 +227,71 @@ public class CLIApp implements NotificationListener {
         out.println();
         out.println("undo                            undo the last Mark as Cooked (same session)");
         out.println("status                          AI status and calls left today");
+        out.println("run <file>                      run the commands in a file, e.g. run sample-data/demo-commands.txt");
         out.println("exit                            leave the interactive CLI");
         return true;
+    }
+
+    /**
+     * Runs the commands in a text file, one per line, showing each one after the prompt.
+     * Blank lines are skipped and lines starting with # are printed as notes. Questions are
+     * not asked while a file runs, so use the options instead (e.g. --merge, --add-missing).
+     */
+    private boolean runFile(CommandLine cmd) {
+        checkOptions(cmd);
+        String file = need(cmd.rest(1), "Which file? e.g. run sample-data/demo-commands.txt");
+        if (runningFile) {
+            throw new IllegalStateException("A command file cannot run another file.");
+        }
+        List<String> lines;
+        try {
+            lines = Files.readAllLines(Path.of(file), StandardCharsets.UTF_8);
+        } catch (NoSuchFileException e) {
+            throw new IllegalArgumentException("File not found: " + file);
+        } catch (IOException | InvalidPathException e) {
+            throw new IllegalArgumentException("Could not read " + file + ": " + e.getMessage());
+        }
+        boolean wasInteractive = interactive;
+        interactive = false;
+        runningFile = true;
+        int ran = 0;
+        int failed = 0;
+        boolean afterCommand = false;
+        try {
+            for (String raw : lines) {
+                String line = raw.strip();
+                if (line.startsWith("\uFEFF")) {
+                    line = line.substring(1).strip();               // BOM from Notepad
+                }
+                if (line.isEmpty()) {
+                    continue;
+                }
+                if (line.startsWith("#")) {
+                    if (afterCommand) {
+                        out.println();                              // a gap before each new note
+                        afterCommand = false;
+                    }
+                    out.println(line);
+                    continue;
+                }
+                if (line.equalsIgnoreCase("exit") || line.equalsIgnoreCase("quit")) {
+                    break;
+                }
+                out.println(PROMPT + line);
+                afterCommand = true;
+                ran++;
+                if (!execute(CommandLine.parse(line))) {
+                    failed++;
+                }
+            }
+        } finally {
+            interactive = wasInteractive;
+            runningFile = false;
+        }
+        String summary = "Ran " + plural(ran, "command") + " from " + file
+                + (failed == 0 ? "." : "; " + failed + " did not work.");
+        out.println(summary);
+        return failed == 0;
     }
 
     // ------------------------------------------------------------ F03 / F05 pantry
@@ -248,7 +320,7 @@ public class CLIApp implements NotificationListener {
         String name = need(cmd.rest(2), "Which item? e.g. pantry add rice --qty 2 --unit kg");
         double qty = quantity(cmd.option("qty", "1"));
         StorageLocation location = location(cmd.option("location", "pantry"));
-        LocalDate expires = date(cmd.option("expires", ""));
+        LocalDate expires = date(cmd.option("expires", ""), controller.today());
         PantryItem item = new PantryItem(name, qty, cmd.option("unit", ""), location, expires);
         if (controller.addPantryItem(item, false)) {
             return say("Added " + describe(item) + ".");
@@ -285,7 +357,7 @@ public class CLIApp implements NotificationListener {
         checkOptions(cmd, "name", "qty", "unit", "location", "expires");
         String name = need(cmd.rest(2), "Which item? e.g. pantry edit milk --qty 2");
         PantryItem item = findPantry(name).orElseThrow(() -> new IllegalArgumentException(name + " is not in your pantry."));
-        LocalDate expires = cmd.has("expires") ? date(cmd.option("expires", "")) : item.getBestBefore();
+        LocalDate expires = cmd.has("expires") ? date(cmd.option("expires", ""), controller.today()) : item.getBestBefore();
         PantryItem changed = controller.updatePantryItem(item.getId(), cmd.option("name", item.getName()),
                 cmd.has("qty") ? quantity(cmd.option("qty", "")) : item.getQuantity(),
                 cmd.option("unit", item.getUnit()),
@@ -393,8 +465,7 @@ public class CLIApp implements NotificationListener {
         checkOptions(cmd, "use");
         Recipe r = findRecipe(cmd.word(2));
         String wanted = need(cmd.rest(3), "Which ingredient? e.g. recipe substitute " + idFor(r) + " buttermilk");
-        Ingredient ing = r.getIngredients().stream().filter(i -> i.getName().equalsIgnoreCase(wanted)).findFirst()
-                .orElseThrow(() -> new IllegalArgumentException(wanted + " is not an ingredient of \"" + r.getTitle() + "\"."));
+        Ingredient ing = findIngredient(r, wanted);
         out.println("Looking for substitutes for " + ing.getName() + "...");
         List<Substitution> subs = controller.suggestSubstitutes(r, ing.getName());
         if (subs.isEmpty()) {
@@ -430,7 +501,7 @@ public class CLIApp implements NotificationListener {
         if (!skipped.isEmpty()) {
             sb.append(" Not in your pantry, so skipped: ").append(String.join(", ", skipped)).append(".");
         }
-        sb.append(interactive ? " Type undo if this was a mistake." : " (Undo works in the interactive CLI, in the same session.)");
+        sb.append(interactive || runningFile ? " Type undo if this was a mistake." : " (Undo works in the interactive CLI, in the same session.)");
         return say(sb.toString());
     }
 
@@ -439,7 +510,7 @@ public class CLIApp implements NotificationListener {
         if (undone.isPresent()) {
             return say("Undone: " + undone.get() + ". Your pantry is back as it was.");
         }
-        return say("There is nothing to undo." + (interactive ? "" : " (Undo works within one interactive session.)"));
+        return say("There is nothing to undo." + (interactive || runningFile ? "" : " (Undo works within one interactive session.)"));
     }
 
     private void printRecipe(Recipe r) {
@@ -789,6 +860,9 @@ public class CLIApp implements NotificationListener {
             printAnswer(controller.chat(message));
             return true;
         }
+        if (runningFile) {
+            throw new IllegalArgumentException("In a command file, write the message: chat \"What can I make?\"");
+        }
         out.println("Chat with the agent (type exit to leave the chat).");
         chatLoop();
         return true;
@@ -906,6 +980,29 @@ public class CLIApp implements NotificationListener {
         return hits.get(0);
     }
 
+    /**
+     * The recipe's ingredient with this name; if there is none, the one ingredient whose name
+     * contains it ("spinach" finds "baby spinach").
+     */
+    static Ingredient findIngredient(Recipe r, String wanted) {
+        String w = wanted.trim().toLowerCase(Locale.ROOT);
+        for (Ingredient i : r.getIngredients()) {
+            if (i.getName().equalsIgnoreCase(w)) {
+                return i;
+            }
+        }
+        List<Ingredient> hits = r.getIngredients().stream()
+                .filter(i -> i.getName().toLowerCase(Locale.ROOT).contains(w)).toList();
+        if (hits.size() == 1) {
+            return hits.get(0);
+        }
+        if (hits.isEmpty()) {
+            throw new IllegalArgumentException(wanted + " is not an ingredient of \"" + r.getTitle() + "\".");
+        }
+        throw new IllegalArgumentException("Which one? " + String.join(", ",
+                hits.stream().map(Ingredient::getName).toList()));
+    }
+
     private String idFor(Recipe r) {
         return controller.findRecipe(r.getId()).isPresent() ? shortId(r) : "last";
     }
@@ -952,13 +1049,33 @@ public class CLIApp implements NotificationListener {
 
     /** A date like 2026-11-20; "" or "none" means no date. */
     static LocalDate date(String text) {
+        return date(text, LocalDate.now());
+    }
+
+    /**
+     * A best-before date: year-month-day ("2026-11-20"), "today", "tomorrow", "+N" or "-N"
+     * (N days from or before today, handy in command files such as the ones in sample-data/)
+     * or "none".
+     */
+    static LocalDate date(String text, LocalDate today) {
         if (text == null || text.isBlank() || text.trim().equalsIgnoreCase("none")) {
             return null;
         }
+        String t = text.trim().toLowerCase(Locale.ROOT);
+        if (t.equals("today")) {
+            return today;
+        }
+        if (t.equals("tomorrow")) {
+            return today.plusDays(1);
+        }
+        if (t.matches("[+-]\\d{1,4}")) {
+            int days = Integer.parseInt(t.substring(1));
+            return t.startsWith("-") ? today.minusDays(days) : today.plusDays(days);
+        }
         try {
-            return LocalDate.parse(text.trim());
+            return LocalDate.parse(t);
         } catch (DateTimeParseException e) {
-            throw new IllegalArgumentException("Dates are year-month-day, like 2026-11-20.");
+            throw new IllegalArgumentException("Dates are year-month-day like 2026-11-20, or +3 for 3 days from today.");
         }
     }
 

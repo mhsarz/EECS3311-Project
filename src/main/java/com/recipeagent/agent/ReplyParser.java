@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
+import com.recipeagent.llm.LLMResponse;
 import com.recipeagent.model.Ingredient;
 import com.recipeagent.model.Recipe;
 
@@ -51,6 +52,21 @@ final class ReplyParser {
             return el.getAsJsonObject();
         } catch (JsonParseException e) {
             throw new ReplyException("the JSON in the reply was not valid");
+        }
+    }
+
+    /**
+     * Finds the JSON object in an LLM reply. If it cannot be read and the reply stopped at
+     * the token limit, the reason says so, so the retry asks for a shorter answer.
+     */
+    static JsonObject extractJson(LLMResponse reply) throws ReplyException {
+        try {
+            return extractJson(reply.getText());
+        } catch (ReplyException e) {
+            if (reply.isTruncated()) {
+                throw new ReplyException("the reply was cut off at the length limit; give a shorter answer");
+            }
+            throw e;
         }
     }
 

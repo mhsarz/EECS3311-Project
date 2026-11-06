@@ -239,5 +239,51 @@ class CLIAppTest {
         assertEquals("1 item", CLIApp.plural(1, "item"));
         assertEquals(LocalDate.of(2026, 11, 20), CLIApp.date("2026-11-20"));
         assertNull(CLIApp.date("none"));
+        LocalDate today = LocalDate.of(2026, 11, 5);
+        assertEquals(LocalDate.of(2026, 11, 8), CLIApp.date("+3", today));
+        assertEquals(today, CLIApp.date("Today", today));
+        assertEquals(LocalDate.of(2026, 11, 3), CLIApp.date("-2", today));
+        assertEquals(LocalDate.of(2026, 11, 6), CLIApp.date("tomorrow", today));
+        assertEquals(LocalDate.of(2027, 1, 1), CLIApp.date("2027-01-01", today));
+        assertThrows(IllegalArgumentException.class, () -> CLIApp.date("next week", today));
+    }
+
+    @Test
+    void runsCommandFiles() throws Exception {
+        AgentController c = controller(null);
+        Path file = tmp.resolve("cmds.txt");
+        Files.writeString(file, "\uFEFF# Sample pantry\n\npantry add milk --qty 1 --unit L --expires +2\n"
+                + "pantry add milk\nchat\npantry list\n", StandardCharsets.UTF_8);
+        String out = run(c, "should not be read", "run", file.toString());
+        assertTrue(out.startsWith("1|"));                       // the chat line did not work
+        assertTrue(out.contains("# Sample pantry\n"));
+        assertTrue(out.contains(CLIApp.PROMPT + "pantry add milk --qty 1 --unit L --expires +2\n"));
+        assertTrue(out.contains("best before Nov 7, 2026"));
+        assertTrue(out.contains("Nothing was added"));          // no question asked in a file
+        assertTrue(out.contains("In a command file, write the message"));
+        assertTrue(out.contains("Ran 4 commands from " + file + "; 1 did not work."));
+
+        Path ok = tmp.resolve("ok.txt");
+        Files.writeString(ok, "pantry list\nexit\npantry remove milk\n", StandardCharsets.UTF_8);
+        String done = run(c, "", "run", ok.toString());
+        assertTrue(done.startsWith("0|"));
+        assertTrue(done.contains("Ran 1 command from"));
+        assertTrue(run(c, "", "run", tmp.resolve("missing.txt").toString()).contains("File not found"));
+        assertTrue(run(c, "", "run").contains("Which file?"));
+    }
+
+    @Test
+    void findsIngredientsByPartOfTheName() {
+        Recipe r = new Recipe("Salad", List.of(new com.recipeagent.model.Ingredient("baby spinach", 100, "g"),
+                new com.recipeagent.model.Ingredient("red onion", 1, ""),
+                new com.recipeagent.model.Ingredient("onion", 1, "")), List.of("Mix"), 10, 2);
+        assertEquals("baby spinach", CLIApp.findIngredient(r, "Spinach").getName());
+        assertEquals("onion", CLIApp.findIngredient(r, "onion").getName());   // exact name first
+        assertEquals("red onion", CLIApp.findIngredient(r, "red").getName());
+        assertThrows(IllegalArgumentException.class, () -> CLIApp.findIngredient(r, "kale"));
+        Recipe two = new Recipe("Soup", List.of(new com.recipeagent.model.Ingredient("green peas", 1, "cup"),
+                new com.recipeagent.model.Ingredient("frozen peas", 1, "cup")), List.of("Boil"), 10, 2);
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> CLIApp.findIngredient(two, "peas"));
+        assertTrue(e.getMessage().contains("Which one? green peas, frozen peas"));
     }
 }

@@ -164,7 +164,7 @@ public class RecipeAgent {
             Prompt prompt = buildRecipePrompt(req, pantryJson, profileJson, problem);
             LLMResponse reply = llm.generate(prompt.toText(), List.of());
             try {
-                Recipe recipe = ReplyParser.toRecipe(ReplyParser.extractJson(reply.getText()));
+                Recipe recipe = ReplyParser.toRecipe(ReplyParser.extractJson(reply));
                 checkRecipe(recipe, req, allergies);
                 return recipe;
             } catch (ReplyParser.ReplyException e) {
@@ -270,7 +270,7 @@ public class RecipeAgent {
             Prompt prompt = buildSubstitutePrompt(recipe, target, pantryJson, profileJson, problem);
             LLMResponse reply = llm.generate(prompt.toText(), List.of());
             try {
-                return toSubstitutions(ReplyParser.extractJson(reply.getText()), allergies, pantryTool);
+                return toSubstitutions(ReplyParser.extractJson(reply), allergies, pantryTool);
             } catch (ReplyParser.ReplyException e) {
                 problem = e.getMessage();
             }
@@ -390,7 +390,7 @@ public class RecipeAgent {
             builder.buildFormat(FLYER_FORMAT);
             LLMResponse reply = llm.generate(builder.getPrompt().toText(), List.of());
             try {
-                return ShoppingReplies.toFlyer(ReplyParser.extractJson(reply.getText()), store.trim());
+                return ShoppingReplies.toFlyer(ReplyParser.extractJson(reply), store.trim());
             } catch (ReplyParser.ReplyException e) {
                 problem = e.getMessage();
             }
@@ -442,7 +442,7 @@ public class RecipeAgent {
             builder.buildFormat(SALES_FORMAT);
             LLMResponse reply = llm.generate(builder.getPrompt().toText(), List.of());
             try {
-                return ShoppingReplies.toSaleMatches(ReplyParser.extractJson(reply.getText()), cartNames, entries);
+                return ShoppingReplies.toSaleMatches(ReplyParser.extractJson(reply), cartNames, entries);
             } catch (ReplyParser.ReplyException e) {
                 problem = e.getMessage();
             }
@@ -486,7 +486,7 @@ public class RecipeAgent {
             builder.buildFormat(NAMES_FORMAT);
             LLMResponse reply = llm.generate(builder.getPrompt().toText(), List.of());
             try {
-                return ShoppingReplies.toNameMatches(ReplyParser.extractJson(reply.getText()), ingredients, pantryNames);
+                return ShoppingReplies.toNameMatches(ReplyParser.extractJson(reply), ingredients, pantryNames);
             } catch (ReplyParser.ReplyException e) {
                 problem = e.getMessage();
             }
@@ -532,6 +532,9 @@ public class RecipeAgent {
                 String answer = reply.getText().isBlank()
                         ? "Sorry, I could not come up with an answer. Please try asking another way."
                         : reply.getText().trim();
+                if (reply.isTruncated() && !reply.getText().isBlank()) {
+                    answer += "\n(The answer was cut off because it was too long.)";
+                }
                 chatHistory.add("Assistant: " + answer);
                 answered = true;
                 return answer;

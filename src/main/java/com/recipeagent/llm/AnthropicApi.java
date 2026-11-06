@@ -28,10 +28,13 @@ public class AnthropicApi {
     public static final URI DEFAULT_ENDPOINT = URI.create("https://api.anthropic.com/v1/messages");
     public static final String API_VERSION = "2023-06-01";
     static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(90);
+    /** Longest wait before the one retry, even if the API asks for longer. */
+    static final Duration MAX_RETRY_WAIT = Duration.ofSeconds(10);
 
     private final String apiKey;
     private final URI endpoint;
     private final HttpClient http;
+    private Duration retryWait = Duration.ofSeconds(2);
 
     public AnthropicApi(String apiKey) {
         this(apiKey, DEFAULT_ENDPOINT);
@@ -58,17 +61,60 @@ public class AnthropicApi {
      * @throws LLMException if the API cannot be reached or returns an error
      */
     public JsonObject createMessage(JsonObject params) {
-        HttpResponse<String> response;
+        HttpRequest request = buildRequest(params);
+        HttpResponse<String> response = send(request);
+        if (isTemporary(response.statusCode())) {
+            // Rate limit, overloaded or a server error: wait a moment and try once more.
+            pause(waitBeforeRetry(response.headers().firstValue("retry-after").orElse(null)));
+            response = send(request);
+        }
+        return parseResponse(response.statusCode(), response.body());
+    }
+
+    private HttpResponse<String> send(HttpRequest request) {
         try {
-            response = http.send(buildRequest(params),
-                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            return http.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         } catch (IOException e) {
             throw new LLMException("Could not reach the Anthropic API: " + e.getMessage(), e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new LLMException("Request to the Anthropic API was interrupted", e);
         }
-        return parseResponse(response.statusCode(), response.body());
+    }
+
+    private static void pause(Duration d) {
+        try {
+            Thread.sleep(d.toMillis());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new LLMException("Request to the Anthropic API was interrupted", e);
+        }
+    }
+
+    /** Sets the default wait before the retry (tests use a short one). */
+    void setRetryWait(Duration wait) {
+        this.retryWait = wait;
+    }
+
+    /** 429 (rate limit), 529 (overloaded) and 5xx errors are worth one more try. */
+    static boolean isTemporary(int status) {
+        return status == 429 || status == 529 || (status >= 500 && status <= 504);
+    }
+
+    /** The API's retry-after seconds if given (at most MAX_RETRY_WAIT), else the default wait. */
+    Duration waitBeforeRetry(String retryAfter) {
+        if (retryAfter != null) {
+            try {
+                long seconds = Long.parseLong(retryAfter.trim());
+                if (seconds >= 0) {
+                    Duration d = Duration.ofSeconds(seconds);
+                    return d.compareTo(MAX_RETRY_WAIT) > 0 ? MAX_RETRY_WAIT : d;
+                }
+            } catch (NumberFormatException e) {
+                // use the default wait
+            }
+        }
+        return retryWait;
     }
 
     HttpRequest buildRequest(JsonObject params) {
@@ -103,11 +149,28 @@ public class AnthropicApi {
                 String msg = err.has("message") ? err.get("message").getAsString() : "";
                 detail = type + ": " + msg;
             }
-            throw new LLMException("Anthropic API returned HTTP " + status + " (" + detail + ")");
+            throw new LLMException("Anthropic API returned HTTP " + status + " (" + detail + ")" + hint(status));
         }
         if (json == null) {
             throw new LLMException("Anthropic API returned a reply that is not a JSON object");
         }
         return json;
+    }
+
+    /** What the user can do about common errors. */
+    static String hint(int status) {
+        switch (status) {
+            case 401:
+            case 403:
+                return ". Check LLM_API_KEY in your .env file.";
+            case 404:
+                return ". Check LLM_MODEL in your .env file.";
+            case 429:
+                return ". Too many requests; wait a minute and try again.";
+            case 529:
+                return ". The AI service is busy; try again in a minute.";
+            default:
+                return "";
+        }
     }
 }

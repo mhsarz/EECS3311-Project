@@ -21,7 +21,12 @@ import java.util.regex.Pattern;
  */
 public class ClaudeClient implements LLMClient {
 
-    public static final int DEFAULT_MAX_TOKENS = 2048;
+    /**
+     * Upper limit for one reply. Newer models may think before answering and the thinking
+     * counts towards this limit, so it is set well above the size of a recipe; only the
+     * tokens actually used are paid for.
+     */
+    public static final int DEFAULT_MAX_TOKENS = 8000;
     private static final Pattern TOOL_NAME = Pattern.compile("[A-Za-z0-9_-]{1,64}");
 
     private final AnthropicApi sdk;

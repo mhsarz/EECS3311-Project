@@ -1,0 +1,27 @@
+SAMPLE FLYER FOR TESTING - made up for the EECS 3311 course project.
+The items and prices below are invented. This is NOT a real flyer from this store.
+
+This week's deals
+
+Bakery
+- Whole Wheat Sliced Bread 675 g: 2 for $5.00
+- Bagels, 6 pack: $2.49
+
+Dairy
+- Milk 2% 4L: $5.99
+- Salted Butter 454 g: $4.99
+
+Produce
+- Fresh Baby Spinach 142 g   $2.49
+- Garlic, 3 pack             $1.49
+- Red Peppers                $1.99/lb
+- Broccoli Crowns            $1.49/lb
+
+Frozen
+- Green Peas, 750 g          $2.29
+
+Household
+- Paper Towels, 6 rolls      $6.99
+- Dish Soap 740 mL           $1.99
+
+Our weekly specials: ask in store!

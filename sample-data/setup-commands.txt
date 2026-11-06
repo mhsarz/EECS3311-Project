@@ -1,0 +1,38 @@
+# Sample data for the Smart Pantry CLI (no AI needed).
+# Run from the project folder:   java -jar target/recipe-agent-0.1.0-jar-with-dependencies.jar cli run sample-data/setup-commands.txt
+# Dates are relative to today (+2 = in two days), so the expiry alerts always work.
+# Running it again only reports that the items are already there.
+
+# F03 pantry: some food that expires soon, some that keeps
+pantry add baby spinach --qty 150 --unit g --location fridge --expires +1
+pantry add milk --qty 1 --unit L --location fridge --expires +2
+pantry add chicken breast --qty 500 --unit g --location fridge --expires +3
+pantry add plain yogurt --qty 1 --unit cup --location fridge --expires -1
+pantry add eggs --qty 6 --location fridge --expires +12
+pantry add cheddar cheese --qty 200 --unit g --location fridge --expires +20
+pantry add green onions --qty 1 --unit bunch --location fridge --expires +5
+pantry add white rice --qty 2 --unit kg --location pantry
+pantry add spaghetti --qty 500 --unit g --location pantry --expires +300
+pantry add diced tomatoes --qty 2 --unit can --location pantry --expires +400
+pantry add onion --qty 3 --location pantry --expires +21
+pantry add garlic --qty 1 --unit head --location pantry --expires +30
+pantry add frozen peas --qty 750 --unit g --location freezer --expires +180
+pantry list
+
+# F05 expiry alerts
+pantry expiring
+
+# F04 profile (the AI follows it in every recipe)
+profile set --allergy peanuts --dislike olives --portions 2
+profile show
+
+# F02 shopping cart
+cart add bread
+cart add bananas --qty 6
+cart add butter --qty 1 --unit lb
+cart list
+
+# F10 pick the stores to compare (the sample flyers are in sample-data/flyers)
+flyers pick "No Frills" Metro FreshCo
+flyers stores
+status
