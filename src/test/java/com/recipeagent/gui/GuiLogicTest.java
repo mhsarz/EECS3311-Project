@@ -384,4 +384,35 @@ class GuiLogicTest {
                                                                   List<com.recipeagent.model.SaleMatch> matches) {
         return new com.recipeagent.controller.SaleCheck(checked, matches, null);
     }
+
+    @Test
+    void cookConfirmationRatingAndCartRemoveTexts() {
+        com.recipeagent.controller.CookPreview none = new com.recipeagent.controller.CookPreview(List.of(
+                new com.recipeagent.controller.CookPreview.Line("parmesan", null, 50, "g", 0, 0, "")));
+        com.recipeagent.controller.CookPreview some = new com.recipeagent.controller.CookPreview(List.of(
+                new com.recipeagent.controller.CookPreview.Line("rice", "rice", 1, "kg", 2, 1, "kg")));
+        assertEquals("Mark as cooked", RecipePanel.cookButtonText(none));
+        assertEquals("Yes, reduce them", RecipePanel.cookButtonText(some));
+        assertEquals("Rated 4 of 5.", RecipePanel.ratedText(4));
+        assertEquals("You can rate it later in History.", RecipePanel.ratedText(0));
+
+        assertEquals(400, RecipePanel.noticeWidth(0));                       // not shown yet
+        assertEquals(363, RecipePanel.noticeWidth(480));
+        assertEquals(150, RecipePanel.noticeWidth(100));
+        assertEquals("Click a star to rate (or press 1-5).", RateDialog.ratingText(0));
+        assertEquals("1 of 5 star", RateDialog.ratingText(1));
+        assertEquals("3 of 5 stars", RateDialog.ratingText(3));
+        int step = RateDialog.STAR_SIZE + RateDialog.STAR_GAP;
+        assertEquals(1, RateDialog.starAt(0));
+        assertEquals(0, RateDialog.starAt(RateDialog.STAR_SIZE + 1));        // in the gap
+        assertEquals(2, RateDialog.starAt(step + 2));
+        assertEquals(5, RateDialog.starAt(4 * step + RateDialog.STAR_SIZE - 1));
+        assertEquals(0, RateDialog.starAt(5 * step));
+        assertEquals(0, RateDialog.starAt(-3));
+
+        assertEquals("Are you sure you want to remove milk (2 L) from your cart?",
+                CartPanel.removeQuestion(new com.recipeagent.model.CartItem("milk", 2, "L", com.recipeagent.model.CartSource.MANUAL)));
+        assertEquals("Are you sure you want to remove eggs (12) from your cart?",
+                CartPanel.removeQuestion(new com.recipeagent.model.CartItem("eggs", 12)));
+    }
 }

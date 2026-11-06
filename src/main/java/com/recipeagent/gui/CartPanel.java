@@ -352,11 +352,22 @@ public class CartPanel extends JPanel {
         if (item == null) {
             return;
         }
+        int ok = JOptionPane.showConfirmDialog(this, removeQuestion(item), "Remove item",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
+        if (ok != JOptionPane.OK_OPTION) {
+            return;
+        }
         controller.removeFromCart(item.getName());
         message.setForeground(Theme.PRIMARY);
         message.setText("Removed " + item.getName() + ".");
         refresh();
         dataChanged.run();
+    }
+
+    /** "Are you sure you want to remove milk (2 L) from your cart?" */
+    static String removeQuestion(CartItem item) {
+        return "Are you sure you want to remove " + item.getName() + " (" + CartTableModel.amount(item)
+                + ") from your cart?";
     }
 
     private void clearCart() {

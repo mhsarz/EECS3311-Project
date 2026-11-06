@@ -2,6 +2,7 @@ package com.recipeagent.gui;
 
 import com.recipeagent.agent.PantryEmptyException;
 import com.recipeagent.controller.AgentController;
+import com.recipeagent.controller.CookPreview;
 import com.recipeagent.llm.LLMException;
 import com.recipeagent.llm.LLMUnavailableException;
 import com.recipeagent.model.CartItem;
@@ -573,13 +574,7 @@ public class RecipePanel extends JPanel {
 
     private void showCheck(IngredientCheck check) {
         if (check.allInStock()) {
-            int choice = JOptionPane.showConfirmDialog(this,
-                    "You have everything for this recipe.\nMark it as cooked now? "
-                            + "This takes the ingredients out of your pantry.",
-                    "All in stock", JOptionPane.YES_NO_OPTION);
-            if (choice == JOptionPane.YES_OPTION) {
-                markCooked();
-            }
+            markCooked("You have everything for this recipe.");
             return;
         }
         Map<String, IngredientStatus> byName = statusByName(recipe.getIngredients(),
@@ -696,9 +691,32 @@ public class RecipePanel extends JPanel {
     // ------------------------------------------------------------ F06 cook + undo
 
     private void markCooked() {
+        markCooked(null);
+    }
+
+    /**
+     * Asks "You are cooking X. Reduce these ingredients in your pantry?" with the amounts,
+     * then marks the recipe as cooked. The first time a recipe is cooked (and it has no
+     * rating yet) the user is asked for a rating, which can be skipped.
+     *
+     * @param intro a line shown before the question, or null
+     */
+    private void markCooked(String intro) {
         if (recipe == null) {
             return;
         }
+        CookPreview preview = controller.previewCooked(recipe);
+        String question = preview.question(recipe.getTitle());
+        if (intro != null) {
+            question = intro + "\n\n" + question;
+        }
+        Object[] options = {cookButtonText(preview), "Cancel"};
+        int choice = JOptionPane.showOptionDialog(this, question, "Mark as Cooked", JOptionPane.YES_NO_OPTION,
+                JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
+        if (choice != 0) {
+            return;
+        }
+        boolean firstCook = controller.isFirstCook(recipe);
         List<String> skipped;
         try {
             skipped = controller.markCooked(recipe);
@@ -708,7 +726,26 @@ public class RecipePanel extends JPanel {
         }
         refresh();
         dataChanged.run();
-        say(cookedMessage(skipped), Theme.PRIMARY);
+        String msg = cookedMessage(skipped);
+        say(msg, Theme.PRIMARY);
+        if (firstCook) {
+            int stars = RateDialog.ask(this, recipe.getTitle());
+            if (stars > 0) {
+                controller.rateRecipe(recipe.getId(), stars);
+                dataChanged.run();
+            }
+            say(msg + " " + ratedText(stars), Theme.PRIMARY);
+        }
+    }
+
+    /** The button that confirms Mark as Cooked. */
+    static String cookButtonText(CookPreview preview) {
+        return preview.getUsed().isEmpty() ? "Mark as cooked" : "Yes, reduce them";
+    }
+
+    /** "Rated 4 of 5." or, if skipped, where to rate it later. */
+    static String ratedText(int stars) {
+        return stars > 0 ? "Rated " + stars + " of 5." : "You can rate it later in History.";
     }
 
     private void undo() {
@@ -746,8 +783,20 @@ public class RecipePanel extends JPanel {
     /** A short message under the recipe; long ones wrap onto a second line. */
     private void say(String text, Color colour) {
         notice.setForeground(colour);
-        notice.setText("<html><div style='width:" + NOTICE_WIDTH + "px'>" + ChatFormat.escape(text) + "</div></html>");
+        notice.setText("<html><div style='width:" + noticeWidth(notice.getWidth()) + "px'>"
+                + ChatFormat.escape(text) + "</div></html>");
         notice.setToolTipText(text);
+    }
+
+    /**
+     * The CSS width for the message so it wraps inside the space next to the buttons. Swing
+     * draws CSS pixels about 1.3 times wider than screen pixels, so the width is scaled down.
+     */
+    static int noticeWidth(int availablePixels) {
+        if (availablePixels <= 0) {
+            return NOTICE_WIDTH;
+        }
+        return Math.max(150, (int) (availablePixels / 1.3) - 6);
     }
 
     private void showAiError(RuntimeException ex) {

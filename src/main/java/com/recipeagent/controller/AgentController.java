@@ -465,6 +465,46 @@ public class AgentController {
     }
 
     /**
+     * What {@link #markCooked} would take out of the pantry, without changing anything (F06).
+     * It uses the same names as markCooked: an exact pantry name, else the one the agent matched.
+     */
+    public CookPreview previewCooked(Recipe recipe) {
+        if (recipe == null) {
+            throw new IllegalArgumentException("Recipe must not be null");
+        }
+        Map<String, Double> left = new HashMap<>();
+        List<CookPreview.Line> lines = new ArrayList<>();
+        for (Ingredient ing : recipe.getIngredients()) {
+            PantryItem item = pantry.findByName(ing.getName()).stream().findFirst()
+                    .orElse(matchedPantryItem(ing.getName()).orElse(null));
+            if (item == null) {
+                lines.add(new CookPreview.Line(ing.getName(), null, ing.getQuantity(), ing.getUnit(), 0, 0, ""));
+                continue;
+            }
+            // An ingredient listed twice uses up the same pantry item twice.
+            double before = left.getOrDefault(key(item.getName()), item.getQuantity());
+            double after = Math.max(0, before - ing.getQuantity());
+            left.put(key(item.getName()), after);
+            lines.add(new CookPreview.Line(ing.getName(), item.getName(), ing.getQuantity(), ing.getUnit(),
+                    before, after, item.getUnit()));
+        }
+        return new CookPreview(lines);
+    }
+
+    /**
+     * True if this recipe was never cooked or rated (it may not be in the history yet), so
+     * the app asks for a rating after Mark as Cooked (F06, F08). Asked only this first time.
+     */
+    public boolean isFirstCook(Recipe recipe) {
+        if (recipe == null) {
+            return false;
+        }
+        return history.findById(recipe.getId())
+                .map(r -> r.getTimesCooked() == 0 && r.getRating() == 0)
+                .orElse(true);
+    }
+
+    /**
      * Undoes the last action (F06).
      *
      * @return a description of what was undone, or empty if there was nothing to undo

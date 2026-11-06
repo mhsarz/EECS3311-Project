@@ -112,11 +112,13 @@ dependency) and falls back to the system look if FlatLaf is missing. Tabs:
   When an ingredient has a different name in your pantry, Cook This asks the AI once, so "scallions"
   can count as your "green onions" (shown next to the ingredient).
   **Substitute** asks the AI for replacements and "Use substitute" puts one into the recipe. **Cook This**
-  lists what is missing and can add it to the cart; **Mark as Cooked** takes the amounts out of the
-  pantry (with **Undo**); **Save to History**. If the AI is unavailable the page says why and offers
+  lists what is missing and can add it to the cart; **Mark as Cooked** first shows what it will take
+  out of the pantry ("chicken breast: 400 g (you have 500 g, 100 g left)") and asks you to confirm,
+  then reduces the amounts (with **Undo**). The first time you cook a recipe it asks for a 1-5 star
+  rating, which you can skip for now; **Save to History**. If the AI is unavailable the page says why and offers
   Try Again or Open History.
 - **Cart**: your shopping list. Add an item with a quantity and an optional unit, edit it (or
-  double-click), remove it, or clear the cart. Each item shows where it came from: You, Recipe (from
+  double-click), remove it (it asks "Are you sure?" first), or clear the cart. Each item shows where it came from: You, Recipe (from
   Cook This) or Chat (added by the agent). New items are checked against this week's flyers by the
   AI; items on sale show the store and price ("No Frills · $5.49") and a sale alert appears.
   **Check for sales** checks the whole cart again.
@@ -169,7 +171,7 @@ The GUI and the CLI use the same saved data (`data/`), so changes made in one sh
 | F03 Pantry | `pantry add rice --qty 2 --unit kg --location pantry --expires 2027-03-01`, `pantry list`, `pantry edit rice --qty 3`, `pantry remove rice` |
 | F04 Profile | `profile set --diet vegetarian --allergy peanuts`, `profile show`, `profile setup` (questions from the agent) |
 | F05 Expiry alerts | `pantry expiring`, then `recipe generate --use-expiring` |
-| F06 Mark as cooked, undo | `recipe cooked <id>`, `undo` |
+| F06 Mark as cooked, undo | `recipe cooked <id>` (the interactive CLI shows what is taken out and asks y/n, then asks for a rating the first time), `undo` |
 | F07 Substitutes | `recipe substitute <id> buttermilk [--use 1]` |
 | F08 History | `history list [--favourites]`, `history rate <id> 4`, `history fav <id>`, `history search chicken`, `history remove <id>` |
 | F09 Chat | `chat "What can I make with chicken?"`, or `chat` for a conversation |

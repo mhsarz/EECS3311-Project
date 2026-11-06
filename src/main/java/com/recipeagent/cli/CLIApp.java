@@ -496,13 +496,48 @@ public class CLIApp implements NotificationListener {
 
     private boolean recipeCooked(CommandLine cmd) {
         Recipe r = findRecipe(cmd.word(2));
+        if (interactive) {
+            String question = controller.previewCooked(r).question(r.getTitle());
+            if (!ask(question + System.lineSeparator() + "(y/n) ")) {
+                return say("Not marked as cooked. Your pantry was not changed.");
+            }
+        }
+        boolean firstCook = controller.isFirstCook(r);
         List<String> skipped = controller.markCooked(r);
         StringBuilder sb = new StringBuilder("Marked \"" + r.getTitle() + "\" as cooked. The ingredients were taken out of your pantry.");
         if (!skipped.isEmpty()) {
             sb.append(" Not in your pantry, so skipped: ").append(String.join(", ", skipped)).append(".");
         }
         sb.append(interactive || runningFile ? " Type undo if this was a mistake." : " (Undo works in the interactive CLI, in the same session.)");
-        return say(sb.toString());
+        say(sb.toString());
+        if (firstCook && interactive) {
+            askRating(r);
+        }
+        return true;
+    }
+
+    /** After the first cook: "Rate it 1-5, or press Enter to skip for now". */
+    private void askRating(Recipe r) {
+        while (true) {
+            out.print("How was it? Rate it 1-5, or press Enter to skip for now: ");
+            out.flush();
+            String a = readLine();
+            if (a == null || a.isBlank() || a.trim().equalsIgnoreCase("skip")) {
+                out.println("Skipped. Rate it later with: history rate " + idFor(r) + " 4");
+                return;
+            }
+            try {
+                int stars = Integer.parseInt(a.trim());
+                if (stars >= 1 && stars <= 5) {
+                    controller.rateRecipe(r.getId(), stars);
+                    out.println("Rated \"" + r.getTitle() + "\" " + stars + " of 5.");
+                    return;
+                }
+            } catch (NumberFormatException e) {
+                // ask again
+            }
+            out.println("Type a number from 1 to 5, or press Enter to skip.");
+        }
     }
 
     private boolean undo() {
@@ -557,6 +592,12 @@ public class CLIApp implements NotificationListener {
                 return cartList();
             case "remove": {
                 String name = need(cmd.rest(2), "Which item? e.g. cart remove milk");
+                Optional<CartItem> item = controller.getCartItems().stream()
+                        .filter(i -> i.getName().equalsIgnoreCase(name)).findFirst();
+                if (item.isPresent() && interactive && !ask("Are you sure you want to remove " + item.get().getName()
+                        + " (" + amount(item.get().getQuantity(), item.get().getUnit()) + ") from your cart? (y/n) ")) {
+                    return say("Kept " + item.get().getName() + " in your cart.");
+                }
                 return controller.removeFromCart(name) ? say("Removed " + name + " from your cart.")
                         : error(name + " is not in your cart.");
             }

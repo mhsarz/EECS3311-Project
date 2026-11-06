@@ -113,6 +113,8 @@ class CLIAppTest {
                 "1",
                 "recipe save",
                 "recipe cooked last",
+                "y",
+                "",
                 "undo",
                 "exit"));
         assertTrue(out.contains("Scallion Rice\n20 min, 2 portions"));
@@ -123,7 +125,10 @@ class CLIAppTest {
         assertTrue(out.contains("1. tamari\n     same amount"));
         assertTrue(out.contains("Using tamari instead of soy sauce"));
         assertTrue(out.contains("Saved \"Scallion Rice\" to your history"));
+        assertTrue(out.contains("You are cooking \"Scallion Rice\". Reduce these ingredients in your pantry?"));
+        assertTrue(out.contains("  rice: 1 kg (you have 2 kg, 1 kg left)"));
         assertTrue(out.contains("Marked \"Scallion Rice\" as cooked."));
+        assertTrue(out.contains("Rate it 1-5, or press Enter to skip for now: Skipped. Rate it later with: history rate"));
         assertTrue(out.contains("Undone: Cooked Scallion Rice. Your pantry is back as it was."));
         assertTrue(out.contains("Bye. Everything is saved."));
         assertTrue(llm.prompts.get(0).contains("at most 20 minutes"));
