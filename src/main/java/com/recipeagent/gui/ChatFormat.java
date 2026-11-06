@@ -35,10 +35,21 @@ final class ChatFormat {
         return markers;
     }
 
-    /** Wraps text for a chat bubble (Swing labels wrap HTML at a fixed width). */
+    /**
+     * Wraps text for a chat bubble (Swing labels wrap HTML at a fixed width). The agent is told
+     * to write plain text, but if it still uses Markdown, **bold** is shown in bold and "# "
+     * headings and "* " bullets are tidied, instead of showing the symbols.
+     */
     static String bubbleHtml(String text) {
-        return "<html><div style='width:" + BUBBLE_WIDTH + "px'>" + escape(text).replace("\n", "<br>")
-                + "</div></html>";
+        return "<html><div style='width:" + BUBBLE_WIDTH + "px'>"
+                + markdownToHtml(escape(text)).replace("\n", "<br>") + "</div></html>";
+    }
+
+    /** **bold** -> <b>bold</b>; "# Title" -> "Title"; "* item" -> "- item" (text already escaped). */
+    static String markdownToHtml(String escaped) {
+        return escaped.replaceAll("\\*\\*(.+?)\\*\\*", "<b>$1</b>")
+                .replaceAll("(?m)^#{1,6}\\s+", "")
+                .replaceAll("(?m)^(\\s*)\\*\\s+", "$1- ");
     }
 
     static String escape(String s) {

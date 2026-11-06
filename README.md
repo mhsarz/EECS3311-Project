@@ -141,7 +141,8 @@ dependency) and falls back to the system look if FlatLaf is missing. Tabs:
   The chat can answer "What's on sale at No Frills?".
 - **Profile**: your diet, allergies, dislikes and default portions, used by every recipe. Fill in the
   form (type an allergy or dislike and press Enter; click × to remove it) and click **Save profile**,
-  or click **Help Me Set Up** to answer about 6 questions from the agent in the Chat panel; it saves the
+  or click **Help Me Set Up** to answer 4 questions from the agent in the Chat panel (diet, allergies,
+  dislikes, portions); it saves the
   profile at the end. Without the AI, the page asks you to use the form instead.
 
 The Alerts panel lists expiry alerts when the app starts (and once a day while it stays open);

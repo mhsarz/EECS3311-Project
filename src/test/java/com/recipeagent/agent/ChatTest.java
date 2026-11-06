@@ -162,6 +162,8 @@ class ChatTest {
 
         assertEquals("Do you follow a diet, like vegetarian or halal?", a.startProfileSetup());
         assertTrue(llm.prompts.get(0).contains(RecipeAgent.PROFILE_SETUP_MESSAGE));
+        assertTrue(llm.prompts.get(0).contains("diet, allergies, dislikes and the usual number of portions (4 questions)"));
+        assertTrue(llm.prompts.get(0).contains("no Markdown"));
         assertTrue(llm.prompts.get(0).contains("ask one question per message"));
         a.chat("Vegetarian");
         String last = a.chat("Peanuts");

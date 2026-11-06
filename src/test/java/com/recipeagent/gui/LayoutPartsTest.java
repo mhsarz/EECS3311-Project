@@ -42,6 +42,14 @@ class LayoutPartsTest {
     }
 
     @Test
+    void markdownFromTheAgentIsShownAsText() {
+        String html = ChatFormat.bubbleHtml("## Saved\n- **Diet:** none\n* **Portions:** 2 & more");
+        assertTrue(html.contains("Saved<br>- <b>Diet:</b> none<br>- <b>Portions:</b> 2 &amp; more"));
+        assertFalse(html.contains("**"));
+        assertEquals("2 * 3 = 6", ChatFormat.markdownToHtml("2 * 3 = 6"));                // a lone star stays
+    }
+
+    @Test
     void headerShowsReadableDate() {
         assertEquals("Wed, Nov 4, 2026", HeaderBar.formatDate(LocalDate.of(2026, 11, 4)));
     }

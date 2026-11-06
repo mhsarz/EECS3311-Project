@@ -944,11 +944,18 @@ public class CLIApp implements NotificationListener {
     }
 
     private void printAnswer(String answer) {
-        out.println("agent> " + answer.replace("\n", System.lineSeparator() + "       "));
+        out.println("agent> " + plainText(answer).replace("\n", System.lineSeparator() + "       "));
         List<String> markers = changeMarkers(controller.getLastChatActions());
         if (!markers.isEmpty()) {
             out.println("       (" + String.join(", ", markers) + ")");
         }
+    }
+
+    /** The agent is told to write plain text; if it uses Markdown anyway, **bold** and "# " are removed. */
+    static String plainText(String text) {
+        return text.replaceAll("\\*\\*(.+?)\\*\\*", "$1")
+                .replaceAll("(?m)^#{1,6}\\s+", "")
+                .replaceAll("(?m)^(\\s*)\\*\\s+", "$1- ");
     }
 
     /** "cart updated" / "profile saved" for what the agent changed (reading is not shown). */

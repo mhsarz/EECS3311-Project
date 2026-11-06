@@ -730,10 +730,12 @@ public class RecipeAgent {
                 + "- Only add to or remove from the cart, or save the profile, when the user asks for it.\n"
                 + "- If the request is unclear, ask one short clarifying question instead of guessing.\n"
                 + "- Answer in short, plain sentences (no JSON). Say what you changed, if anything.\n"
+                + "- Write plain text: no Markdown such as ** or #. For a list, start each line with \"- \".\n"
                 + "- Profile set-up: when the user asks for help setting up their profile, ask one "
-                + "question per message (diet, allergies, dislikes, usual number of portions, and a "
-                + "few more if useful; about 6 in total). When you have enough answers, save them with "
-                + "the profile tool (action 'save') and tell the user what you saved.");
+                + "question per message about exactly what the profile stores: diet, allergies, "
+                + "dislikes and the usual number of portions (4 questions). Do not ask about anything "
+                + "else (such as cooking time or favourite cuisines), because it cannot be saved. Then "
+                + "save the answers with the profile tool (action 'save') and tell the user what you saved.");
         int from = Math.max(0, Math.min(turnStart, chatHistory.size() - HISTORY_IN_PROMPT));
         List<String> lines = new ArrayList<>();
         for (int i = from; i < chatHistory.size(); i++) {

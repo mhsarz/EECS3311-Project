@@ -93,7 +93,7 @@ public class ProfilePanel extends JPanel {
         titles.add(Theme.label("Your preferences", Font.BOLD, 13f, Theme.TEXT), BorderLayout.NORTH);
         titles.add(Theme.muted("Fill in the form, or let the agent ask you a few questions."), BorderLayout.SOUTH);
         head.add(titles, BorderLayout.WEST);
-        helpButton.setToolTipText("The agent asks about 6 short questions in the Chat panel, then saves your profile");
+        helpButton.setToolTipText("The agent asks 4 short questions in the Chat panel (diet, allergies, dislikes, portions), then saves your profile");
         helpButton.addActionListener(e -> helpMeSetUp());
         head.add(helpButton, BorderLayout.EAST);
         card.add(head, BorderLayout.NORTH);

@@ -312,4 +312,9 @@ class CLIAppTest {
         assertEquals(List.of(1), pdfCalls);
         assertTrue(CLIApp.HELP.get("flyers").contains("flyers upload ./nofrills.pdf"));
     }
+
+    @Test
+    void chatAnswersLoseMarkdown() {
+        assertEquals("Saved:\n- Diet: none\n- Portions: 2", CLIApp.plainText("# Saved:\n- **Diet:** none\n* **Portions:** 2"));
+    }
 }
