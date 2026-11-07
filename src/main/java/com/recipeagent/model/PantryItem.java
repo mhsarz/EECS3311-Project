@@ -67,9 +67,9 @@ public class PantryItem {
         return bestBefore != null;
     }
 
-    /** True if this item has the same name as {@code otherName}, ignoring case and spaces. */
+    /** True if this item has the same name as {@code otherName}, ignoring case, spaces and a plural ending. */
     public boolean hasName(String otherName) {
-        return otherName != null && name.equalsIgnoreCase(otherName.trim());
+        return ItemNames.same(name, otherName);                 // "Eggs" is the same item as "egg"
     }
 
     /** Days from today until the best-before date (negative if already past). */

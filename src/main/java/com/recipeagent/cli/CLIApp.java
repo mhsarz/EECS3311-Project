@@ -183,7 +183,7 @@ public class CLIApp implements NotificationListener {
                     "recipe generate [--time 30] [--portions 2] [--use milk,spinach] [--use-expiring] [--allow-missing] [--save]",
                     "recipe show <id>                <id> is from history list, or 'last' for the last recipe",
                     "recipe check <id> [--add-missing]   what is missing (F11)",
-                    "recipe substitute <id> <ingredient> [--use 1]   replacements (F07)",
+                    "recipe substitute <id> <ingredient or its number> [--use 1]   replacements (F07)",
                     "recipe cooked <id>              takes the ingredients out of the pantry (F06); then: undo",
                     "recipe save [<id>]              save to history (F08)"),
             "cart", String.join(System.lineSeparator(),
@@ -408,7 +408,7 @@ public class CLIApp implements NotificationListener {
         if (cmd.has("use-expiring")) {
             List<PantryItem> soon = controller.getItemsToUseSoon();
             if (soon.isEmpty()) {
-                return error("Nothing in your pantry is about to expire.");
+                out.println("Nothing in your pantry is about to expire, so any pantry food can be used.");
             }
             soon.forEach(i -> required.add(i.getName()));
         }
@@ -593,7 +593,7 @@ public class CLIApp implements NotificationListener {
             case "remove": {
                 String name = need(cmd.rest(2), "Which item? e.g. cart remove milk");
                 Optional<CartItem> item = controller.getCartItems().stream()
-                        .filter(i -> i.getName().equalsIgnoreCase(name)).findFirst();
+                        .filter(i -> i.hasName(name)).findFirst();
                 if (item.isPresent() && interactive && !ask("Are you sure you want to remove " + item.get().getName()
                         + " (" + amount(item.get().getQuantity(), item.get().getUnit()) + ") from your cart? (y/n) ")) {
                     return say("Kept " + item.get().getName() + " in your cart.");
@@ -1036,13 +1036,23 @@ public class CLIApp implements NotificationListener {
     }
 
     /**
-     * The recipe's ingredient with this name; if there is none, the one ingredient whose name
-     * contains it ("spinach" finds "baby spinach").
+     * The recipe's ingredient with this name (or this number in the list, "1" = the first);
+     * if there is none, the one ingredient whose name contains it ("spinach" finds "baby
+     * spinach"), or the same item in singular or plural ("egg" finds "eggs").
      */
     static Ingredient findIngredient(Recipe r, String wanted) {
         String w = wanted.trim().toLowerCase(Locale.ROOT);
-        for (Ingredient i : r.getIngredients()) {
-            if (i.getName().equalsIgnoreCase(w)) {
+        List<Ingredient> all = r.getIngredients();
+        if (w.matches("\\d{1,3}")) {
+            int n = Integer.parseInt(w);
+            if (n < 1 || n > all.size()) {
+                throw new IllegalArgumentException("\"" + r.getTitle() + "\" has " + all.size()
+                        + " ingredients; give a number from 1 to " + all.size() + ".");
+            }
+            return all.get(n - 1);
+        }
+        for (Ingredient i : all) {
+            if (i.getName().equalsIgnoreCase(w) || com.recipeagent.model.ItemNames.same(i.getName(), w)) {
                 return i;
             }
         }

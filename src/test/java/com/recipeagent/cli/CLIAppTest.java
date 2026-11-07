@@ -286,6 +286,10 @@ class CLIAppTest {
         assertEquals("onion", CLIApp.findIngredient(r, "onion").getName());   // exact name first
         assertEquals("red onion", CLIApp.findIngredient(r, "red").getName());
         assertThrows(IllegalArgumentException.class, () -> CLIApp.findIngredient(r, "kale"));
+        assertEquals("red onion", CLIApp.findIngredient(r, "2").getName());               // by number
+        assertTrue(assertThrows(IllegalArgumentException.class, () -> CLIApp.findIngredient(r, "9"))
+                .getMessage().contains("from 1 to 3"));
+        assertEquals("onion", CLIApp.findIngredient(r, "Onions").getName());             // plural
         Recipe two = new Recipe("Soup", List.of(new com.recipeagent.model.Ingredient("green peas", 1, "cup"),
                 new com.recipeagent.model.Ingredient("frozen peas", 1, "cup")), List.of("Boil"), 10, 2);
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> CLIApp.findIngredient(two, "peas"));
@@ -316,5 +320,16 @@ class CLIAppTest {
     @Test
     void chatAnswersLoseMarkdown() {
         assertEquals("Saved:\n- Diet: none\n- Portions: 2", CLIApp.plainText("# Saved:\n- **Diet:** none\n* **Portions:** 2"));
+    }
+
+    @Test
+    void useExpiringWithNothingExpiringStillGivesARecipe() {
+        ScriptedLLM llm = new ScriptedLLM().text(RECIPE);
+        AgentController c = controller(llm);
+        run(c, "", "pantry", "add", "rice", "--qty", "2", "--unit", "kg");
+        String out = run(c, "", "recipe", "generate", "--use-expiring");
+        assertTrue(out.startsWith("0|"));
+        assertTrue(out.contains("Nothing in your pantry is about to expire, so any pantry food can be used."));
+        assertTrue(out.contains("Scallion Rice"));
     }
 }

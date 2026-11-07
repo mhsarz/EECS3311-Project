@@ -15,7 +15,7 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Keeps the food the user has at home (F03). Item names are unique (ignoring case),
+ * Keeps the food the user has at home (F03). Item names are unique (ignoring case and plurals),
  * so adding an item with an existing name is refused and the caller can merge instead.
  * Also provides expiring items (F05), deducting and restoring quantities for
  * Mark as Cooked and Undo (F06), and comparing a recipe with the stock (F11).
@@ -44,7 +44,9 @@ public class PantryManager {
                     System.err.println("Warning: skipped a saved pantry item with a missing id, name or location");
                     continue;
                 }
-                if (items.stream().noneMatch(i -> i.hasName(item.getName()))) {
+                // Saved data may hold both "egg" and "eggs" from before plurals were matched:
+                // keep both rather than dropping one; only exact repeats are skipped.
+                if (items.stream().noneMatch(i -> i.getName().equalsIgnoreCase(item.getName().trim()))) {
                     items.add(item);
                 }
             }

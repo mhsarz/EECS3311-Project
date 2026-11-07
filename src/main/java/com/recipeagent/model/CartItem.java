@@ -33,9 +33,9 @@ public class CartItem {
         return name;
     }
 
-    /** True if this item has the same name as {@code otherName}, ignoring case and outer spaces. */
+    /** True if this item has the same name as {@code otherName}, ignoring case, spaces and a plural ending. */
     public boolean hasName(String otherName) {
-        return otherName != null && name.equalsIgnoreCase(otherName.trim());
+        return ItemNames.same(name, otherName);                 // "Eggs" is the same item as "egg"
     }
 
     public double getQuantity() {

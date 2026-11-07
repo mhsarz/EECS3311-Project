@@ -17,13 +17,15 @@ cart sales
 cart list
 
 # F01 recipe from pantry food, using what expires first (F05), saved to history (F08)
+# (with nothing expiring soon, any pantry food is used)
 recipe generate --time 30 --portions 2 --use-expiring --save
 
 # F11 what is missing (an ingredient with another name in the pantry still counts)
 recipe check last --add-missing
 
-# F07 substitutes for one ingredient of the recipe (add --use 1 to put the first one in)
-recipe substitute last spinach
+# F07 substitutes for one ingredient of the recipe: 2 = the second ingredient in the list
+# (or give its name, e.g. recipe substitute last spinach; add --use 1 to put the first one in)
+recipe substitute last 2
 
 # F06 mark as cooked (takes the amounts out of the pantry), then undo
 recipe cooked last
