@@ -24,7 +24,9 @@ java -jar target/recipe-agent-0.1.0-jar-with-dependencies.jar cli               
 - Java 17 or newer (`java -version`)
 - Maven 3.8 or newer (`mvn -version`)
 - Internet access for the first build (Maven downloads the dependencies) and for the AI features
-- An Anthropic API key (only needed for the AI features; see below)
+- A Claude API key from Anthropic (only needed for the AI features; see below). The app talks only
+  to the Anthropic Messages API: keys from other AI providers (OpenAI, Gemini, ...) do not work, and a
+  Claude.ai Pro or Max subscription does not include API access (the API is billed separately).
 
 ### Dependencies
 
@@ -58,6 +60,7 @@ The Anthropic API is called with Java's built-in `java.net.http` client, so no S
 3. Open `.env` and replace `YOUR_LOCAL_API_KEY_HERE` with your real key.
 
    Get a key at https://console.anthropic.com (Settings, API keys; create it inside a workspace).
+   It must be an Anthropic (Claude) API key; it starts with `sk-ant-`. The account needs API credits.
    `.env` is listed in `.gitignore`, so it is never committed. Never put a real key in `.env.example`,
    the source code, screenshots, or videos. You can also set `LLM_API_KEY` as an environment variable
    instead of using `.env`.
@@ -75,8 +78,8 @@ name matching) say that the AI is unavailable and why.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `LLM_API_KEY` | (none) | Anthropic API key. Without it, only the deterministic features work. |
-| `LLM_MODEL` | `claude-opus-5-5` | Model name sent to the API. |
+| `LLM_API_KEY` | (none) | Anthropic (Claude) API key. Without it, only the deterministic features work. |
+| `LLM_MODEL` | `claude-opus-5-5` | Claude model name sent to the API, e.g. `claude-haiku-5-5` (cheaper) or `claude-opus-5-5`. Only Claude models work. |
 | `LLM_DAILY_LIMIT` | `100` | Maximum LLM calls per day (enforced by `LLMClientProxy`). The CLI's `status` shows how many are left. |
 | `DATA_DIR` | `data` | Folder where pantry, cart, history, profile and flyers are saved. |
 | `FLYER_URL_TEMPLATE` | (none) | Optional web address of a store's flyer with `{store}` for the store name. Without it, upload flyer files in the Flyers tab. |
