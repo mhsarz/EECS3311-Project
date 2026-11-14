@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<diagram program="umlet" version="15.1">
+  <zoom_level>10</zoom_level>
+  <element>
+    <id>UMLSequenceAllInOne</id>
+    <coordinates>
+      <x>10</x>
+      <y>10</y>
+      <w>1900</w>
+      <h>1960</h>
+    </coordinates>
+    <panel_attributes>title=SD04 Refresh Flyers (F10), Stage 2: text or PDF flyers, PDFs read in page groups
+obj=User~u ACTOR
+obj=:MainWindow~gui
+obj=:AgentController~ctrl
+obj=:FlyerService~fs
+obj=:FlyerSource~src
+obj=:RecipeAgent~agent
+obj=:LLMClientProxy~llm
+u-&gt;&gt;&gt;gui : click Refresh flyers; on=gui
+gui-&gt;&gt;&gt;ctrl : refreshFlyers(progress); on=ctrl
+ctrl-&gt;&gt;&gt;fs : getSelectedStores(); on=fs
+fs.&gt;ctrl : selected stores; off=fs
+combinedFragment=loop~stores ctrl llm
+ctrl:[for each selected store]
+ctrl-&gt;&gt;&gt;fs : fetchRaw(store); on=fs
+fs-&gt;&gt;&gt;src : fetch(store); on=src
+src.&gt;fs : FlyerContent (text or PDF); off=src
+fs.&gt;ctrl : FlyerContent; off=fs
+combinedFragment=alt~kind ctrl llm
+ctrl:[content is text]
+ctrl-&gt;&gt;&gt;agent : extractFlyer(content, store, today, progress); on=agent
+agent-&gt;&gt;&gt;llm : generate(prompt, tools); on=llm
+llm.&gt;agent : LLMResponse (items JSON); off=llm
+agent.&gt;ctrl : Flyer; off=agent
+..
+ctrl:[content is a PDF]
+ctrl-&gt;&gt;&gt;llm : getRemainingCalls(); on=llm
+llm.&gt;ctrl : calls left (enough for all page groups); off=llm
+ctrl-&gt;&gt;&gt;agent : extractFlyer(content, store, today, progress); on=agent
+combinedFragment=loop~pages agent llm
+agent:[for each group of 4 pages]
+agent.&gt;gui : progress("Reading pages 1 to 4 of N")
+agent-&gt;&gt;&gt;llm : generate(prompt, tools, [PDF attachment]); on=llm
+llm.&gt;agent : LLMResponse (items JSON); off=llm
+combinedFragment=opt~cut agent llm
+agent:[reply cut off at the length limit]
+agent-&gt;&gt;&gt;llm : generate(...) again for each half of the page group; on=llm
+llm.&gt;agent : LLMResponse for each half; off=llm
+--
+--
+agent.&gt;ctrl : Flyer (items of all pages merged); off=agent
+--
+ctrl-&gt;&gt;&gt;fs : save(flyer); on=fs
+fs.&gt;ctrl; off=fs
+--
+ref=ctrl llm : check cart against new flyers (see SD03)
+ctrl.&gt;gui : FlyerRefresh (updated flyers, problems, sales); off=ctrl
+gui.&gt;u : show sale items and any problems; off=gui</panel_attributes>
+    <additional_attributes/>
+  </element>
+</diagram>
