@@ -12,4 +12,21 @@ public record AgentAction(String tool, String args, String result) {
     public boolean succeededWith(String toolName) {
         return tool.equals(toolName) && !result.contains("\"error\"");
     }
+
+    /**
+     * What this call changed, for the note under the agent's answer ("Pantry updated",
+     * "Marked as cooked"), or null if it only read something. Tools put it in a "change" field.
+     */
+    public String change() {
+        try {
+            com.google.gson.JsonElement el = com.google.gson.JsonParser.parseString(result);
+            if (el.isJsonObject() && el.getAsJsonObject().has("change")
+                    && el.getAsJsonObject().get("change").isJsonPrimitive()) {
+                return el.getAsJsonObject().get("change").getAsString();
+            }
+        } catch (RuntimeException e) {
+            // not JSON: nothing changed that we know of
+        }
+        return null;
+    }
 }

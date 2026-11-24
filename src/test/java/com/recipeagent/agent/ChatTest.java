@@ -103,19 +103,20 @@ class ChatTest {
 
     @Test
     void stopsAfterToolLimitAndAsksForAnswer() {
+        int max = RecipeAgent.DEFAULT_MAX_TOOL_CALLS;
         ScriptedLLM llm = new ScriptedLLM();
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < max; i++) {
             llm.then(LLMResponse.toolCall("pantry", "list"));
         }
-        llm.then(LLMResponse.toolCall("pantry", "list"));   // would be a 6th call: ignored
+        llm.then(LLMResponse.toolCall("pantry", "list"));   // would be one call too many: ignored
         RecipeAgent a = agent(llm);
 
         String answer = a.chat("Check everything");
 
-        assertEquals(5, a.getLastActions().size());
-        assertEquals(6, llm.prompts.size());
-        assertEquals(0, llm.toolCounts.get(5).intValue());           // no tools offered on the last call
-        assertTrue(llm.prompts.get(5).contains("used all 5 tool calls"));
+        assertEquals(max, a.getLastActions().size());
+        assertEquals(max + 1, llm.prompts.size());
+        assertEquals(0, llm.toolCounts.get(max).intValue());         // no tools offered on the last call
+        assertTrue(llm.prompts.get(max).contains("used all " + max + " tool calls"));
         assertTrue(answer.startsWith("Sorry"));           // the scripted LLM gave no text
     }
 

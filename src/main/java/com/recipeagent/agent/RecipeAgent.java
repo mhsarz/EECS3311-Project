@@ -93,7 +93,7 @@ public class RecipeAgent {
     }
 
     /** Most tool calls the agent may make while answering one chat message (F09). */
-    public static final int DEFAULT_MAX_TOOL_CALLS = 5;
+    public static final int DEFAULT_MAX_TOOL_CALLS = 8;
     /** How many earlier chat lines are included in the prompt. */
     static final int HISTORY_IN_PROMPT = 30;
     /**
@@ -727,10 +727,16 @@ public class RecipeAgent {
                 + "people. Help with cooking ideas, the pantry, expiring food and the shopping cart.\n"
                 + "- Use the tools to look things up or make changes instead of guessing. You can call "
                 + "one tool at a time, and at most " + maxToolCalls + " per user message.\n"
-                + "- Only add to or remove from the cart, save the profile or save a recipe when the user asks for it.\n"
-                + "- To save a recipe you suggested (\"save this recipe\"), call the recipes tool with action 'save' "
-                + "and the whole recipe: title, cook_time_minutes, portions, ingredients with quantity and unit, "
-                + "and steps. It then appears in the user's recipe history.\n"
+                + "- Only change something (pantry, cart, profile, recipes) when the user asks for it, and "
+                + "change only what they asked for.\n"
+                + "- For a full recipe, use the recipes tool's 'generate' (it uses the pantry, profile and "
+                + "favourites). The recipes tool also checks what is missing and can add it to the cart, finds "
+                + "substitutes, marks a recipe as cooked (taking its ingredients out of the pantry), undoes that, "
+                + "rates, favourites and saves recipes. To save a recipe you wrote yourself, give the whole "
+                + "recipe: title, cook_time_minutes, portions, ingredients with quantity and unit, and steps.\n"
+                + "- When the user says they bought, used or threw away food, update the pantry with the pantry tool.\n"
+                + "- If a tool returns an error, fix the call or tell the user what went wrong; never say a "
+                + "change was made unless the tool result confirms it.\n"
                 + "- If the request is unclear, ask one short clarifying question instead of guessing.\n"
                 + "- Answer in short, plain sentences (no JSON). Say what you changed, if anything.\n"
                 + "- Write plain text: no Markdown such as ** or #. For a list, start each line with \"- \".\n"

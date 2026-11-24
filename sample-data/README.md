@@ -6,7 +6,7 @@ Safe, made-up data for trying the app. Nothing here is real store data, and no f
 |---|---|
 | `setup-commands.txt` | CLI commands that fill the pantry (some food expires in 1-3 days, one item is already expired), set a profile (peanut allergy, dislikes olives) and add a few items to the cart. No AI needed. |
 | `ai-demo-commands.txt` | CLI commands that go through the AI features: read the sample flyers (text, HTML and PDF), sale alerts, generate a recipe, missing ingredients, substitutes, mark as cooked and undo, history, chat. Needs `LLM_API_KEY` and uses about 15-20 AI calls. |
-| `agent-task.txt` | Two plain-English tasks for the standalone agent (`-LLMAPI claude -input sample-data/agent-task.txt`): plan a dinner with expiring food and add missing items to the cart, then check the cart for sales. Needs `LLM_API_KEY`. |
+| `agent-task.txt` | Four plain-English tasks for the standalone agent (`-LLMAPI claude -input sample-data/agent-task.txt`): add eggs and milk to the pantry, plan a dinner with expiring food and add missing items to the cart, save that recipe as a favourite, then check the cart for sales. Needs `LLM_API_KEY`; about 10 AI calls; changes the saved data (add `-data demo-data` to use a copy). |
 | `flyers/sample-flyer-no-frills.txt` | A made-up flyer in plain text (dotted price lists, "2 for $9", "/lb"). |
 | `flyers/sample-flyer-metro.txt` | A made-up flyer in another layout (milk is dearer than at No Frills, so the cart shows the cheaper store). |
 | `flyers/sample-flyer-freshco.html` | A made-up flyer saved as a web page, to show that HTML, styles and scripts are removed before the AI reads it. |

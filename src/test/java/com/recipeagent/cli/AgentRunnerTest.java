@@ -148,11 +148,44 @@ class AgentRunnerTest {
         assertTrue(output.contains("1. used the pantry tool {\"action\":\"expiring\"}"), output);
         assertTrue(output.contains("2. used the cart tool"), output);
         assertTrue(output.contains("Agent: Make spinach fried rice tonight."));
+        assertTrue(output.contains("Changed: Cart updated"), output);
         assertTrue(output.endsWith("Done.\n"), output);
         assertTrue(llm.prompts.get(0).contains("Plan a dinner"));
         // the agent really changed the cart, and it is saved
         assertTrue(c.getCartItems().stream().anyMatch(i -> i.hasName("rice")));
         assertTrue(Files.readString(answer).contains("Make spinach fried rice tonight."));
+    }
+
+    @Test
+    void jsonOutputListsTasksStepsAndChanges() {
+        ScriptedLLM llm = new ScriptedLLM()
+                .tool("cart", "{\"action\":\"add\",\"name\":\"milk\",\"quantity\":2}")
+                .text("I added 2 milk to your cart.");
+        AgentController c = controller(llm);
+
+        int code = run(c, "", "-task", "Add 2 milk to my cart", "-json");
+
+        assertEquals(0, code, output);
+        com.google.gson.JsonObject o = com.google.gson.JsonParser.parseString(output).getAsJsonObject();
+        assertTrue(o.get("ok").getAsBoolean());
+        com.google.gson.JsonObject t = o.getAsJsonArray("tasks").get(0).getAsJsonObject();
+        assertEquals("Add 2 milk to my cart", t.get("task").getAsString());
+        assertEquals("I added 2 milk to your cart.", t.get("answer").getAsString());
+        com.google.gson.JsonObject step = t.getAsJsonArray("steps").get(0).getAsJsonObject();
+        assertEquals("cart", step.get("tool").getAsString());
+        assertEquals("add", step.getAsJsonObject("args").get("action").getAsString());
+        assertEquals("Cart updated", t.getAsJsonArray("changes").get(0).getAsString());
+        // the agent is told nobody can answer follow-up questions
+        assertTrue(llm.prompts.get(0).contains("nobody can answer questions"));
+    }
+
+    @Test
+    void jsonOutputWithoutAKey() {
+        int code = run(controller(null), "", "-task", "What can I cook?", "-json");
+        assertEquals(1, code);
+        com.google.gson.JsonObject o = com.google.gson.JsonParser.parseString(output).getAsJsonObject();
+        assertFalse(o.get("ok").getAsBoolean());
+        assertTrue(o.get("error").getAsString().contains("LLM_API_KEY"));
     }
 
     @Test

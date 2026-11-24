@@ -6,6 +6,10 @@ config.local.json
 
 # Local app data (pantry, cart, history saved while running)
 data/
+demo-data/
+
+# Output of the standalone agent example (-output answers.txt)
+answers.txt
 
 # Maven build output
 target/

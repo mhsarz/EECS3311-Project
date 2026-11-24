@@ -1,6 +1,14 @@
 package com.recipeagent.cli;
 
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.google.gson.JsonPrimitive;
 import com.recipeagent.agent.AgentAction;
+import com.recipeagent.agent.tools.CartTool;
+import com.recipeagent.agent.tools.ProfileTool;
 import com.recipeagent.config.AppConfig;
 import com.recipeagent.controller.AgentController;
 import com.recipeagent.llm.LLMException;
@@ -11,6 +19,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -62,6 +71,7 @@ public final class AgentRunner {
         boolean commands;
         Path output;
         boolean help;
+        boolean json;
     }
 
     private final AgentController controller;
@@ -173,6 +183,9 @@ public final class AgentRunner {
                 case "data":
                     o.dataDir = value != null ? value : next(args, ++i, a);
                     break;
+                case "json":
+                    o.json = true;
+                    break;
                 case "help":
                 case "h":
                 case "?":
@@ -229,10 +242,14 @@ public final class AgentRunner {
                 "  -commands      the input is CLI commands, one per line (see: cli help), not a task",
                 "  -output FILE   also write the agent's answers to FILE",
                 "  -data DIR      folder for the pantry, cart and history (default: data, or DATA_DIR)",
+                "  -json          print the result as JSON (task, answer, steps, changes) for scripts",
                 "  -help          show this text",
                 "",
                 "A task is plain English, e.g. \"Plan a dinner for 2 with what expires soon and add",
                 "anything missing to my cart\". Put several tasks in one file separated by a line ---.",
+                "The agent can read and change the pantry, cart and profile, generate, check, save, cook,",
+                "undo, rate and favourite recipes, find substitutes and read this week's flyer sales.",
+                "Uploading flyers and anything else: use -commands with CLI commands.",
                 "The API key is read from .env (LLM_API_KEY), never from the command line.",
                 "Exit code: 0 done, 1 a task failed (e.g. no AI key), 2 bad options.");
     }
@@ -274,73 +291,157 @@ public final class AgentRunner {
             out.println("Error: " + e.getMessage());
             return FAILED;
         }
-        return runTasks(tasks, source, o.output);
+        return runTasks(tasks, source, o.output, o.json);
     }
 
-    private int runTasks(List<String> tasks, String source, Path output) {
+    /** Told to the agent with every task: nobody is there to answer a follow-up question. */
+    static final String TASK_NOTE = "(This request comes from a task file, so nobody can answer questions. "
+            + "Do the whole task now, make sensible choices where something is unclear, and say what you assumed.)";
+
+    /** What happened to one task; also the JSON output. */
+    record TaskResult(String task, String answer, List<AgentAction> steps, List<String> changes, String error) {
+    }
+
+    private int runTasks(List<String> tasks, String source, Path output, boolean json) {
+        PrintStream text = json ? new PrintStream(OutputStream.nullOutputStream()) : out;
         if (tasks.isEmpty()) {
-            out.println("Error: no task found in " + source + ".");
-            return FAILED;
+            return finish(json, List.of(), "no task found in " + source, FAILED);
         }
-        out.println("Smart Pantry agent - " + plural(tasks.size(), "task") + " from " + source);
-        out.println(controller.getAiStatus());
+        text.println("Smart Pantry agent - " + plural(tasks.size(), "task") + " from " + source);
+        text.println(controller.getAiStatus());
         if (!controller.isAiAvailable()) {
-            out.println("Error: the agent needs the AI for a task. Set LLM_API_KEY in .env (see README),"
-                    + " or run CLI commands without AI: -commands.");
-            return FAILED;
+            return finish(json, List.of(), "the agent needs the AI for a task. Set LLM_API_KEY in .env (see README),"
+                    + " or run CLI commands without AI: -commands.", FAILED);
         }
+        List<TaskResult> results = new ArrayList<>();
         StringBuilder answers = new StringBuilder();
         int failed = 0;
         for (int i = 0; i < tasks.size(); i++) {
             String task = tasks.get(i);
             String label = tasks.size() == 1 ? "Task" : "Task " + (i + 1);
-            out.println();
-            out.println(label + ": " + indent(task));
+            text.println();
+            text.println(label + ": " + indent(task));
             try {
-                String answer = CLIApp.plainText(controller.chat(task)).strip();
+                String answer = CLIApp.plainText(controller.chat(task + "\n" + TASK_NOTE)).strip();
                 List<AgentAction> actions = controller.getLastChatActions();
-                printSteps(actions);
-                out.println("Agent: " + indent(answer));
+                List<String> changes = changes(actions);
+                printSteps(text, actions);
+                text.println("Agent: " + indent(answer));
+                if (!changes.isEmpty()) {
+                    text.println("Changed: " + String.join(", ", changes));
+                }
+                results.add(new TaskResult(task, answer, actions, changes, null));
                 answers.append(label).append(": ").append(task).append(System.lineSeparator())
                         .append(answer).append(System.lineSeparator()).append(System.lineSeparator());
             } catch (LLMUnavailableException e) {
-                out.println("Error: AI unavailable: " + e.getMessage());
+                text.println("Error: AI unavailable: " + e.getMessage());
+                results.add(new TaskResult(task, null, controller.getLastChatActions(), List.of(),
+                        "AI unavailable: " + e.getMessage()));
                 failed += tasks.size() - i;
                 break;
             } catch (LLMException | IllegalArgumentException | IllegalStateException e) {
-                out.println("Error: " + e.getMessage());
+                text.println("Error: " + e.getMessage());
+                results.add(new TaskResult(task, null, controller.getLastChatActions(), List.of(), e.getMessage()));
                 failed++;
             }
         }
         if (output != null && answers.length() > 0) {
             try {
                 Files.writeString(output, answers.toString(), StandardCharsets.UTF_8);
-                out.println();
-                out.println("Answers written to " + output);
+                text.println();
+                text.println("Answers written to " + output);
             } catch (IOException e) {
-                out.println("Error: could not write " + output + ": " + e.getMessage());
+                text.println("Error: could not write " + output + ": " + e.getMessage());
                 failed++;
             }
         }
-        out.println();
-        out.println(failed == 0 ? "Done." : "Done; " + plural(failed, "task") + " did not work.");
-        return failed == 0 ? OK : FAILED;
+        text.println();
+        text.println(failed == 0 ? "Done." : "Done; " + plural(failed, "task") + " did not work.");
+        int code = failed == 0 ? OK : FAILED;
+        return json ? finish(true, results, failed == 0 ? null : plural(failed, "task") + " did not work", code) : code;
+    }
+
+    /** Prints the JSON result (in -json mode) or the error line, and returns {@code code}. */
+    private int finish(boolean json, List<TaskResult> results, String error, int code) {
+        if (!json) {
+            if (error != null) {
+                out.println("Error: " + error);
+            }
+            return code;
+        }
+        JsonObject o = new JsonObject();
+        o.addProperty("ok", code == OK);
+        if (error != null) {
+            o.addProperty("error", error);
+        }
+        JsonArray arr = new JsonArray();
+        for (TaskResult r : results) {
+            JsonObject t = new JsonObject();
+            t.addProperty("task", r.task());
+            if (r.answer() != null) {
+                t.addProperty("answer", r.answer());
+            }
+            if (r.error() != null) {
+                t.addProperty("error", r.error());
+            }
+            JsonArray steps = new JsonArray();
+            for (AgentAction a : r.steps()) {
+                JsonObject st = new JsonObject();
+                st.addProperty("tool", a.tool());
+                st.add("args", jsonOrText(a.args()));
+                st.add("result", jsonOrText(a.result()));
+                steps.add(st);
+            }
+            t.add("steps", steps);
+            JsonArray ch = new JsonArray();
+            r.changes().forEach(ch::add);
+            t.add("changes", ch);
+            arr.add(t);
+        }
+        o.add("tasks", arr);
+        out.println(new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create().toJson(o));
+        return code;
+    }
+
+    private static JsonElement jsonOrText(String s) {
+        try {
+            return JsonParser.parseString(s);
+        } catch (RuntimeException e) {
+            return new JsonPrimitive(s);
+        }
+    }
+
+    /** "Pantry updated", "Cart updated", ... in order, without repeats. */
+    static List<String> changes(List<AgentAction> actions) {
+        List<String> result = new ArrayList<>();
+        for (AgentAction a : actions) {
+            String c = a.change();
+            if (c == null && a.succeededWith(CartTool.NAME) && !a.args().contains("\"list\"")) {
+                c = "Cart updated";
+            } else if (c == null && a.succeededWith(ProfileTool.NAME) && a.args().contains("save")) {
+                c = "Profile saved";
+            }
+            if (c != null && !result.contains(c)) {
+                result.add(c);
+            }
+        }
+        return result;
     }
 
     /** "Steps: pantry {"action":"expiring"}", one line per tool call, so the agent's work is visible. */
-    private void printSteps(List<AgentAction> actions) {
+    private static void printSteps(PrintStream text, List<AgentAction> actions) {
         if (actions.isEmpty()) {
-            out.println("Steps: answered without using a tool");
+            text.println("Steps: answered without using a tool");
             return;
         }
-        out.println("Steps:");
+        text.println("Steps:");
         int n = 1;
         for (AgentAction a : actions) {
             String args = a.args().replaceAll("\\s+", " ");
             if (args.length() > MAX_ARGS_SHOWN) {
                 args = args.substring(0, MAX_ARGS_SHOWN) + "...";
             }
-            out.println("  " + n++ + ". used the " + a.tool() + " tool " + args
+            text.println("  " + n++ + ". used the " + a.tool() + " tool " + args
                     + (a.result().contains("\"error\"") ? " (it reported an error)" : ""));
         }
     }

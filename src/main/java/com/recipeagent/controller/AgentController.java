@@ -5,6 +5,7 @@ import com.recipeagent.agent.AgentTool;
 import com.recipeagent.agent.RecipeAgent;
 import com.recipeagent.agent.tools.CartTool;
 import com.recipeagent.agent.tools.FlyerTool;
+import com.recipeagent.agent.tools.KitchenActions;
 import com.recipeagent.agent.tools.PantryTool;
 import com.recipeagent.agent.tools.ProfileTool;
 import com.recipeagent.agent.tools.RecipeTool;
@@ -64,7 +65,7 @@ import java.util.function.Consumer;
  * notifications, storage), so both interfaces stay thin and depend on one class only.
  * Every method that changes data also saves it, so nothing is lost when the app closes.
  */
-public class AgentController {
+public class AgentController implements KitchenActions {
 
     static final String PANTRY_KEY = "pantry";
     static final String CART_KEY = "cart";
@@ -121,8 +122,10 @@ public class AgentController {
         this.commands = new CommandHistory();
         this.flyers = new FlyerService(onlineFlyers, storage.load(FLYERS_KEY, FlyerService.Data.class));
         this.llm = new LLMClientProxy(realLlm, dailyLimit, storage, clock);
-        List<AgentTool> tools = List.of(new PantryTool(pantry, clock), new ProfileTool(profile),
-                new CartTool(cart), new FlyerTool(flyers, clock), new RecipeTool(history, profile));
+        // The pantry and recipes tools make changes through this controller (KitchenActions),
+        // so they are saved and can be undone exactly like changes made in the GUI or CLI.
+        List<AgentTool> tools = List.of(new PantryTool(pantry, clock, this), new ProfileTool(profile),
+                new CartTool(cart), new FlyerTool(flyers, clock), new RecipeTool(history, profile, this));
         this.agent = new RecipeAgent(llm, new ClaudePromptBuilder(), tools);
         clearEndedSales();
     }
@@ -950,15 +953,16 @@ public class AgentController {
     private void saveAfterChat(List<AgentAction> actions, List<String> cartBefore) {
         if (actions.stream().anyMatch(a -> a.succeededWith(CartTool.NAME))) {
             saveCart();
-            List<String> added = new ArrayList<>();
-            for (String name : cartNames()) {
-                if (cartBefore.stream().noneMatch(b -> b.equalsIgnoreCase(name))) {
-                    added.add(name);
-                }
+        }
+        // Items the agent added (with the cart tool, or as missing recipe ingredients) are sale-checked.
+        List<String> added = new ArrayList<>();
+        for (String name : cartNames()) {
+            if (cartBefore.stream().noneMatch(b -> b.equalsIgnoreCase(name))) {
+                added.add(name);
             }
-            if (!added.isEmpty()) {
-                checkSales(added);
-            }
+        }
+        if (!added.isEmpty()) {
+            checkSales(added);
         }
         if (actions.stream().anyMatch(a -> a.succeededWith(ProfileTool.NAME))) {
             saveProfile();

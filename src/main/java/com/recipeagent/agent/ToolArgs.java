@@ -88,6 +88,22 @@ public final class ToolArgs {
         }
     }
 
+    /** A true/false argument ("true"/"false" strings too), or {@code fallback} if missing. */
+    public boolean getBoolean(String key, boolean fallback) {
+        JsonElement el = json.get(key);
+        if (el == null || el.isJsonNull() || !el.isJsonPrimitive()) {
+            return fallback;
+        }
+        String s = el.getAsString().trim().toLowerCase(java.util.Locale.ROOT);
+        if (s.equals("true") || s.equals("yes")) {
+            return true;
+        }
+        if (s.equals("false") || s.equals("no")) {
+            return false;
+        }
+        return fallback;
+    }
+
     /** True if the argument is present (even if empty). */
     public boolean has(String key) {
         return json.has(key) && !json.get(key).isJsonNull();

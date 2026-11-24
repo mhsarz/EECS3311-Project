@@ -102,8 +102,9 @@ mvn test
 ## Run
 
 The GUI follows the "Smart Pantry" design: a header with tabs, the page in the middle, a
-**Chat** panel on the right (ask in plain language, e.g. "Add a dozen eggs to my cart", or ask for a
-recipe idea and then "Save this recipe" to add it to History; Enter sends,
+**Chat** panel on the right (ask in plain language, e.g. "Add a dozen eggs to my cart", or "I bought 6
+eggs", "Make me a quick dinner and add what I'm missing to my cart", "I cooked it", "Save this
+recipe"; Enter sends,
 Shift+Enter starts a new line; it can be collapsed), the Alerts strip and a status footer. It uses the FlatLaf look and feel (a Maven
 dependency) and falls back to the system look if FlatLaf is missing. Tabs:
 
@@ -199,9 +200,21 @@ from today).
 ### Standalone agent: run the agent on a task (file, standard input or command line)
 
 The jar can also run the agent on a task and exit, without the GUI or the shell. A task is
-plain English. The agent reads your pantry, profile, cart, saved recipes and this week's flyers through
-its tools, decides what to do, can add to the cart, save the profile or save a recipe to History, and prints its answer and every
-tool it used. This is the same agent as the Chat (F09), and it uses the same saved data.
+plain English. The agent decides which of its tools to use, uses them, and prints every step
+and its answer. It is the same agent as the Chat (F09) and it uses the same saved data, so the
+changes it makes show up in the GUI and CLI too. What the agent can do:
+
+| Area | The agent can |
+|---|---|
+| Pantry (F03, F05) | list items, find what expires soon, check an item; add, update and remove items ("I bought...", "I used...") |
+| Recipes (F01, F11, F07) | generate a recipe with the recipe generator (time, portions, items to use, expiring food); check what is missing and add it to the cart; find substitutes and put one into the recipe |
+| Cooking and history (F06, F08) | mark a recipe as cooked (takes the ingredients out of the pantry) and undo it; save, rate and favourite recipes; list saved recipes |
+| Cart and sales (F02, F10) | list the cart, add and remove items (new items are checked against this week's flyers); read this week's sale items |
+| Profile (F04) | read and save diet, allergies, dislikes and portions |
+
+Uploading or refreshing flyers is done with CLI commands (see `-commands` below). The agent only
+changes something when the task asks for it, and every change goes through the same checks as
+the GUI (allergies, valid quantities and dates, undo). It can use up to 8 tools per task.
 
 ```
 java -jar target/recipe-agent-0.1.0-jar-with-dependencies.jar -LLMAPI claude -input task.txt
@@ -216,7 +229,8 @@ java -jar target/recipe-agent-0.1.0-jar-with-dependencies.jar -LLMAPI claude -in
 | `-model NAME` | Claude model; overrides `LLM_MODEL` in `.env`, e.g. `claude-haiku-5-5`. |
 | `-commands` | The input is CLI commands, one per line (as in `cli run`), not a task. No AI needed for most commands. |
 | `-output FILE` | Also write the agent's answers to `FILE`. |
-| `-data DIR` | Folder for the saved pantry, cart and history (default `data`, or `DATA_DIR`). |
+| `-json` | Print the result as JSON (each task, its answer, every tool call with its arguments and result, and what changed), for scripts and automated checks. |
+| `-data DIR` | Folder for the saved pantry, cart and history (default `data`, or `DATA_DIR`). Use a separate folder, e.g. `-data demo-data`, to try tasks without changing your own data (`demo-data/` is git-ignored). |
 | `-help` | Show the options. |
 
 Use exactly one of `-input`, `-stdin` and `-task`. Options work with one or two dashes
@@ -225,25 +239,37 @@ comes from `.env` (`LLM_API_KEY`), never from the command line. Exit code: 0 don
 command failed (for example no API key), 2 wrong options.
 
 A task file can hold several tasks separated by a line with only `---`; they run in order, and
-a later task can refer to an earlier answer. Lines starting with `#` are notes.
-`sample-data/agent-task.txt`:
+a later task can refer to an earlier one ("that recipe"). Lines starting with `#` are notes.
+Nobody can answer a follow-up question in this mode, so the agent is told to make sensible
+choices and say what it assumed. `sample-data/agent-task.txt`:
 
 ```
-Look at my pantry and what expires in the next few days. Suggest one dinner for 2 that uses the
-expiring food and fits my profile, and add anything I am missing to my cart.
+I just bought a dozen eggs and 2 L of milk that is good for a week. Add them to my pantry
+(the milk goes in the fridge).
+---
+Plan a dinner for 2 in 30 minutes that uses the food that expires soon, and add anything I am
+missing to my cart.
+---
+Save that recipe and make it a favourite.
 ---
 What is on my shopping list now, and is any of it on sale this week?
 ```
 
-Working example (after `cli run sample-data/setup-commands.txt` has filled the pantry):
+Working example on a separate copy of the data (`demo-data/`, so your own pantry is not
+changed): the first command fills it with the sample pantry, profile and cart (no AI), the
+second runs the four tasks (about 10 AI calls):
 
 ```
-java -jar target/recipe-agent-0.1.0-jar-with-dependencies.jar -LLMAPI claude -input sample-data/agent-task.txt -output answers.txt
+java -jar target/recipe-agent-0.1.0-jar-with-dependencies.jar -data demo-data -input sample-data/setup-commands.txt -commands
+java -jar target/recipe-agent-0.1.0-jar-with-dependencies.jar -data demo-data -LLMAPI claude -input sample-data/agent-task.txt -output answers.txt
 ```
 
-prints, for each task, the task, the steps (for example `1. used the pantry tool {"action":"expiring"}`,
-`2. used the profile tool {"action":"get"}`, `3. used the cart tool {"action":"add","name":"rice",...}`),
-the agent's answer, and `Done.` The answers are also saved in `answers.txt`.
+prints, for each task, the task, the steps (for example
+`1. used the pantry tool {"action":"add","name":"eggs","quantity":12}`,
+`2. used the recipes tool {"action":"generate","minutes":30,"portions":2,"use_expiring":true}`,
+`3. used the recipes tool {"action":"check","add_missing":true}`), the agent's answer, what changed
+(`Changed: Pantry updated`, `Changed: Cart updated`, ...) and `Done.` The answers are also saved in
+`answers.txt`. Add `-json` to get the same as JSON.
 
 Standard input:
 
@@ -254,7 +280,8 @@ Get-Content task.txt | java -jar target/recipe-agent-0.1.0-jar-with-dependencies
 java -jar target/recipe-agent-0.1.0-jar-with-dependencies.jar -stdin < task.txt              # macOS / Linux
 ```
 
-CLI commands from a file or standard input (every feature, no questions asked):
+CLI commands from a file or standard input (every feature, including uploading flyers; no
+questions asked; `last` and `undo` work within the file):
 
 ```
 java -jar target/recipe-agent-0.1.0-jar-with-dependencies.jar -input sample-data/setup-commands.txt -commands
