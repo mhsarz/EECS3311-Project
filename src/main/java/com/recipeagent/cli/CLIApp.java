@@ -4,6 +4,7 @@ import com.recipeagent.agent.AgentAction;
 import com.recipeagent.agent.PantryEmptyException;
 import com.recipeagent.agent.tools.CartTool;
 import com.recipeagent.agent.tools.ProfileTool;
+import com.recipeagent.agent.tools.RecipeTool;
 import com.recipeagent.controller.AgentController;
 import com.recipeagent.controller.FlyerRefresh;
 import com.recipeagent.controller.SaleCheck;
@@ -990,6 +991,8 @@ public class CLIApp implements NotificationListener {
                 m = "cart updated";
             } else if (a.succeededWith(ProfileTool.NAME) && a.args().contains("save")) {
                 m = "profile saved";
+            } else if (a.succeededWith(RecipeTool.NAME) && a.result().contains("\"saved\"")) {
+                m = "recipe saved to history";
             }
             if (m != null && !result.contains(m)) {
                 result.add(m);

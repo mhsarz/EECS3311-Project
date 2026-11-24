@@ -102,7 +102,8 @@ mvn test
 ## Run
 
 The GUI follows the "Smart Pantry" design: a header with tabs, the page in the middle, a
-**Chat** panel on the right (ask in plain language, e.g. "Add a dozen eggs to my cart"; Enter sends,
+**Chat** panel on the right (ask in plain language, e.g. "Add a dozen eggs to my cart", or ask for a
+recipe idea and then "Save this recipe" to add it to History; Enter sends,
 Shift+Enter starts a new line; it can be collapsed), the Alerts strip and a status footer. It uses the FlatLaf look and feel (a Maven
 dependency) and falls back to the system look if FlatLaf is missing. Tabs:
 
@@ -187,7 +188,7 @@ The GUI and the CLI use the same saved data (`data/`), so changes made in one sh
 | F06 Mark as cooked, undo | `recipe cooked <id>` (the interactive CLI shows what is taken out and asks y/n, then asks for a rating the first time), `undo` |
 | F07 Substitutes | `recipe substitute <id> buttermilk [--use 1]` |
 | F08 History | `history list [--favourites]`, `history rate <id> 4`, `history fav <id>`, `history search chicken`, `history remove <id>` |
-| F09 Chat | `chat "What can I make with chicken?"`, or `chat` for a conversation |
+| F09 Chat | `chat "What can I make with chicken?"`, or `chat` for a conversation (then "save this recipe" saves the suggested recipe to history) |
 | F10 Flyers | `flyers stores`, `flyers pick "No Frills" Metro`, `flyers refresh`, `flyers upload ./nofrills.pdf --store "No Frills"` (a PDF, .txt or .html file), `flyers list --store "No Frills"` |
 | F11 Missing ingredients | `recipe check <id> [--add-missing]` |
 
@@ -198,8 +199,8 @@ from today).
 ### Standalone agent: run the agent on a task (file, standard input or command line)
 
 The jar can also run the agent on a task and exit, without the GUI or the shell. A task is
-plain English. The agent reads your pantry, profile, cart and this week's flyers through its tools,
-decides what to do, can add to the cart or save the profile, and prints its answer and every
+plain English. The agent reads your pantry, profile, cart, saved recipes and this week's flyers through
+its tools, decides what to do, can add to the cart, save the profile or save a recipe to History, and prints its answer and every
 tool it used. This is the same agent as the Chat (F09), and it uses the same saved data.
 
 ```

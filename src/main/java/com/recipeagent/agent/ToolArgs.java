@@ -74,6 +74,20 @@ public final class ToolArgs {
         }
     }
 
+    /**
+     * The arguments as a recipe: title, cook_time_minutes, portions, ingredients
+     * [{name, quantity, unit}] and steps, the same format the recipe generator uses.
+     *
+     * @throws IllegalArgumentException saying what is missing or wrong
+     */
+    public com.recipeagent.model.Recipe toRecipe() {
+        try {
+            return ReplyParser.toRecipe(json);
+        } catch (ReplyParser.ReplyException e) {
+            throw new IllegalArgumentException(e.getMessage());
+        }
+    }
+
     /** True if the argument is present (even if empty). */
     public boolean has(String key) {
         return json.has(key) && !json.get(key).isJsonNull();

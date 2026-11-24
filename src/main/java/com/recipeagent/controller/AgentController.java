@@ -7,6 +7,7 @@ import com.recipeagent.agent.tools.CartTool;
 import com.recipeagent.agent.tools.FlyerTool;
 import com.recipeagent.agent.tools.PantryTool;
 import com.recipeagent.agent.tools.ProfileTool;
+import com.recipeagent.agent.tools.RecipeTool;
 import com.recipeagent.cart.ShoppingCart;
 import com.recipeagent.command.CommandHistory;
 import com.recipeagent.command.CookRecipeCommand;
@@ -121,7 +122,7 @@ public class AgentController {
         this.flyers = new FlyerService(onlineFlyers, storage.load(FLYERS_KEY, FlyerService.Data.class));
         this.llm = new LLMClientProxy(realLlm, dailyLimit, storage, clock);
         List<AgentTool> tools = List.of(new PantryTool(pantry, clock), new ProfileTool(profile),
-                new CartTool(cart), new FlyerTool(flyers, clock));
+                new CartTool(cart), new FlyerTool(flyers, clock), new RecipeTool(history, profile));
         this.agent = new RecipeAgent(llm, new ClaudePromptBuilder(), tools);
         clearEndedSales();
     }
@@ -961,6 +962,9 @@ public class AgentController {
         }
         if (actions.stream().anyMatch(a -> a.succeededWith(ProfileTool.NAME))) {
             saveProfile();
+        }
+        if (actions.stream().anyMatch(a -> a.succeededWith(RecipeTool.NAME) && a.result().contains("\"saved\""))) {
+            saveHistory();
         }
     }
 

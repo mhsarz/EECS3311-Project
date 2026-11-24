@@ -257,6 +257,21 @@ class AgentControllerTest {
     }
 
     @Test
+    void chatCanSaveARecipeToHistory() {
+        ScriptedLLM llm = new ScriptedLLM();
+        llm.replies.add(LLMResponse.toolCall("recipes", "{\"action\":\"save\",\"title\":\"Garlic Chicken Rice\","
+                + "\"cook_time_minutes\":25,\"portions\":2,\"ingredients\":[{\"name\":\"chicken breast\",\"quantity\":2,"
+                + "\"unit\":\"pcs\"},{\"name\":\"rice\",\"quantity\":1,\"unit\":\"cup\"}],\"steps\":[\"Cook the rice\","
+                + "\"Fry the chicken\"]}"));
+        llm.replies.add(LLMResponse.text("Saved Garlic Chicken Rice to your recipes."));
+        AgentController c = controller(llm);
+
+        assertEquals("Saved Garlic Chicken Rice to your recipes.", c.chat("save this recipe"));
+        assertEquals(1, c.getHistory().size());
+        assertEquals("Garlic Chicken Rice", controller(null).getHistory().get(0).getTitle());   // saved to disk
+    }
+
+    @Test
     void chatChangesToCartAreSaved() {
         ScriptedLLM llm = new ScriptedLLM();
         llm.replies.add(LLMResponse.toolCall("cart", "{\"action\":\"add\",\"name\":\"milk\",\"quantity\":2}"));

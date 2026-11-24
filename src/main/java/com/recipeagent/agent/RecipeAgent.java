@@ -727,7 +727,10 @@ public class RecipeAgent {
                 + "people. Help with cooking ideas, the pantry, expiring food and the shopping cart.\n"
                 + "- Use the tools to look things up or make changes instead of guessing. You can call "
                 + "one tool at a time, and at most " + maxToolCalls + " per user message.\n"
-                + "- Only add to or remove from the cart, or save the profile, when the user asks for it.\n"
+                + "- Only add to or remove from the cart, save the profile or save a recipe when the user asks for it.\n"
+                + "- To save a recipe you suggested (\"save this recipe\"), call the recipes tool with action 'save' "
+                + "and the whole recipe: title, cook_time_minutes, portions, ingredients with quantity and unit, "
+                + "and steps. It then appears in the user's recipe history.\n"
                 + "- If the request is unclear, ask one short clarifying question instead of guessing.\n"
                 + "- Answer in short, plain sentences (no JSON). Say what you changed, if anything.\n"
                 + "- Write plain text: no Markdown such as ** or #. For a list, start each line with \"- \".\n"
@@ -830,7 +833,11 @@ public class RecipeAgent {
      * Returns the allergy that {@code text} contains, or null. Matching ignores case and a
      * plural ending, so "peanuts" also catches "peanut butter". It errs on the side of caution.
      */
-    static String findAllergen(String text, List<String> allergies) {
+    /**
+     * The allergy that {@code text} (an ingredient name) mentions, or null. Plural and singular
+     * forms both match ("peanut butter" matches the allergy "peanuts").
+     */
+    public static String findAllergen(String text, List<String> allergies) {
         if (text == null || allergies == null) {
             return null;
         }

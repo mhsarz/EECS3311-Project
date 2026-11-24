@@ -3,6 +3,7 @@ package com.recipeagent.gui;
 import com.recipeagent.agent.AgentAction;
 import com.recipeagent.agent.tools.CartTool;
 import com.recipeagent.agent.tools.ProfileTool;
+import com.recipeagent.agent.tools.RecipeTool;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,6 +28,8 @@ final class ChatFormat {
                 marker = "Cart updated";
             } else if (a.succeededWith(ProfileTool.NAME) && a.args().contains("save")) {
                 marker = "Profile saved";
+            } else if (a.succeededWith(RecipeTool.NAME) && a.result().contains("\"saved\"")) {
+                marker = "Recipe saved";
             }
             if (marker != null && !markers.contains(marker)) {
                 markers.add(marker);
