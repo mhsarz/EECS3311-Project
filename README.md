@@ -247,7 +247,7 @@ the agent's answer, and `Done.` The answers are also saved in `answers.txt`.
 Standard input:
 
 ```
-echo What can I cook tonight with what I have? | java -jar target/recipe-agent-0.1.0-jar-with-dependencies.jar -stdin
+echo "What can I cook tonight with what I have?" | java -jar target/recipe-agent-0.1.0-jar-with-dependencies.jar -stdin
 type task.txt | java -jar target/recipe-agent-0.1.0-jar-with-dependencies.jar -stdin          # Windows cmd
 Get-Content task.txt | java -jar target/recipe-agent-0.1.0-jar-with-dependencies.jar -stdin   # PowerShell
 java -jar target/recipe-agent-0.1.0-jar-with-dependencies.jar -stdin < task.txt              # macOS / Linux

@@ -122,7 +122,8 @@ class AgentRunnerTest {
     @Test
     void splitsTasksAtDashLinesAndSkipsNotes() {
         List<String> tasks = AgentRunner.splitTasks("# my tasks\nWhat expires soon?\n\n---\nAdd milk\nto my cart.\n---\n\n");
-        assertEquals(List.of("What expires soon?", "Add milk\nto my cart."), tasks);
+        assertEquals(List.of("What expires soon?", "Add milk to my cart."), tasks);
+        assertEquals(List.of("What can I cook tonight?"), AgentRunner.splitTasks("What\r\ncan\r\nI\r\ncook\r\ntonight?\r\n"));
         assertEquals(List.of(), AgentRunner.splitTasks("  \n# only a note\n"));
         assertEquals(List.of("one"), AgentRunner.splitTasks("﻿one".substring(1)));
     }

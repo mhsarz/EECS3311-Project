@@ -345,7 +345,10 @@ public final class AgentRunner {
         }
     }
 
-    /** Splits the input into tasks at lines that hold only "---"; blank tasks are dropped. */
+    /**
+     * Splits the input into tasks at lines that hold only "---"; blank tasks are dropped and the
+     * lines of each task are joined into one line.
+     */
     static List<String> splitTasks(String text) {
         List<String> tasks = new ArrayList<>();
         StringBuilder current = new StringBuilder();
@@ -362,7 +365,9 @@ public final class AgentRunner {
     }
 
     private static void add(List<String> tasks, StringBuilder sb) {
-        String t = sb.toString().strip();
+        // One task is one request: the lines of a wrapped paragraph (or the words PowerShell's
+        // echo puts on separate lines) are joined with spaces.
+        String t = sb.toString().strip().replaceAll("\\s*\\R\\s*", " ");
         if (!t.isEmpty()) {
             if (t.length() > MAX_TASK_CHARS) {
                 throw new IllegalArgumentException("A task is longer than " + MAX_TASK_CHARS + " characters.");
