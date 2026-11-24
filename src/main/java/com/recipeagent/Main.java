@@ -1,5 +1,6 @@
 package com.recipeagent;
 
+import com.recipeagent.cli.AgentRunner;
 import com.recipeagent.cli.CLIApp;
 import com.recipeagent.config.AppConfig;
 import com.recipeagent.controller.AgentController;
@@ -16,6 +17,7 @@ import java.util.Arrays;
  *   mvn exec:java                       starts the GUI (MainWindow)
  *   mvn exec:java -Dexec.args="cli"     starts the interactive CLI (CLIApp)
  *   mvn exec:java -Dexec.args="cli pantry list"   runs one CLI command
+ *   java -jar recipe-agent.jar -LLMAPI claude -input task.txt   runs the agent on a task (AgentRunner)
  * </pre>
  * Both interfaces use the same AgentController.
  */
@@ -26,6 +28,16 @@ public final class Main {
 
     public static void main(String[] args) {
         AppConfig config = AppConfig.load();
+        // Standalone agent mode: java -jar ... -LLMAPI claude -input task.txt (also after "cli")
+        boolean cliFirst = args.length > 1 && args[0].equalsIgnoreCase("cli");
+        String[] rest = cliFirst ? Arrays.copyOfRange(args, 1, args.length) : args;
+        if (AgentRunner.isAgentMode(rest)) {
+            int code = AgentRunner.launch(rest, config, System.in, System.out, System.err);
+            if (code != 0) {
+                System.exit(code);
+            }
+            return;
+        }
         if (!config.hasApiKey()) {
             System.out.println("No LLM API key found. Copy .env.example to .env and set LLM_API_KEY."
                     + " Features without AI still work.");

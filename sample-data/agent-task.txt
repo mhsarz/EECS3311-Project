@@ -1,0 +1,7 @@
+# Tasks for the standalone agent:
+#   java -jar target/recipe-agent-0.1.0-jar-with-dependencies.jar -LLMAPI claude -input sample-data/agent-task.txt
+# Lines starting with # are notes. A line with only --- separates two tasks; they run in order.
+Look at my pantry and what expires in the next few days. Suggest one dinner for 2 that uses the
+expiring food and fits my profile, and add anything I am missing to my cart.
+---
+What is on my shopping list now, and is any of it on sale this week?

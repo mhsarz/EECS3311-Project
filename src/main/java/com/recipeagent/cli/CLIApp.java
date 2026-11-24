@@ -251,6 +251,29 @@ public class CLIApp implements NotificationListener {
         } catch (IOException | InvalidPathException e) {
             throw new IllegalArgumentException("Could not read " + file + ": " + e.getMessage());
         }
+        return runLines(lines, file);
+    }
+
+    /**
+     * Runs CLI commands without asking questions, e.g. the lines of a command file or of
+     * standard input (used by the standalone agent mode, {@link AgentRunner}).
+     *
+     * @param source where the lines came from, for the summary line ("standard input")
+     * @return 0 if every command worked, 1 if any failed
+     */
+    public int runCommands(List<String> lines, String source) {
+        controller.getNotifications().subscribe(this);
+        try {
+            return runLines(lines, source) ? 0 : 1;
+        } finally {
+            controller.getNotifications().unsubscribe(this);
+        }
+    }
+
+    private boolean runLines(List<String> lines, String file) {
+        if (runningFile) {
+            throw new IllegalStateException("A command file cannot run another file.");
+        }
         boolean wasInteractive = interactive;
         interactive = false;
         runningFile = true;

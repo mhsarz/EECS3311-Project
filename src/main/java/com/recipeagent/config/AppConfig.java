@@ -107,6 +107,19 @@ public final class AppConfig {
         return getApiKey().isPresent();
     }
 
+    /**
+     * A copy with one setting replaced, e.g. {@code with(KEY_MODEL, "claude-haiku-5-5")} for a
+     * command-line option that overrides {@code .env}. A null or blank value changes nothing.
+     */
+    public AppConfig with(String key, String value) {
+        if (value == null || value.isBlank()) {
+            return this;
+        }
+        Map<String, String> copy = new HashMap<>(values);
+        copy.put(key, value.trim());
+        return new AppConfig(copy);
+    }
+
     public String getModel() {
         String m = values.get(KEY_MODEL);
         return (m == null || m.isBlank()) ? DEFAULT_MODEL : m;

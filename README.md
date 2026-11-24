@@ -17,6 +17,7 @@ mvn clean package
 java -jar target/recipe-agent-0.1.0-jar-with-dependencies.jar                                   # GUI
 java -jar target/recipe-agent-0.1.0-jar-with-dependencies.jar cli run sample-data/setup-commands.txt   # sample data
 java -jar target/recipe-agent-0.1.0-jar-with-dependencies.jar cli                               # CLI
+java -jar target/recipe-agent-0.1.0-jar-with-dependencies.jar -LLMAPI claude -input sample-data/agent-task.txt   # agent on a task
 ```
 
 ## Prerequisites
@@ -193,6 +194,71 @@ The GUI and the CLI use the same saved data (`data/`), so changes made in one sh
 `<id>` is a recipe id from `history list` (the first 4 or more characters are enough), or `last` for
 the recipe shown last in the session. Dates are `2026-11-20`, `today`, `tomorrow` or `+3` (three days
 from today).
+
+### Standalone agent: run the agent on a task (file, standard input or command line)
+
+The jar can also run the agent on a task and exit, without the GUI or the shell. A task is
+plain English. The agent reads your pantry, profile, cart and this week's flyers through its tools,
+decides what to do, can add to the cart or save the profile, and prints its answer and every
+tool it used. This is the same agent as the Chat (F09), and it uses the same saved data.
+
+```
+java -jar target/recipe-agent-0.1.0-jar-with-dependencies.jar -LLMAPI claude -input task.txt
+```
+
+| Option | Meaning |
+|---|---|
+| `-input FILE` | Read the task from a text file (`-input -` reads standard input). |
+| `-stdin` | Read the task from standard input. |
+| `-task "TEXT"` | The task on the command line. |
+| `-LLMAPI NAME` | The LLM API: `claude` (the default and the only one this app supports). |
+| `-model NAME` | Claude model; overrides `LLM_MODEL` in `.env`, e.g. `claude-haiku-5-5`. |
+| `-commands` | The input is CLI commands, one per line (as in `cli run`), not a task. No AI needed for most commands. |
+| `-output FILE` | Also write the agent's answers to `FILE`. |
+| `-data DIR` | Folder for the saved pantry, cart and history (default `data`, or `DATA_DIR`). |
+| `-help` | Show the options. |
+
+Use exactly one of `-input`, `-stdin` and `-task`. Options work with one or two dashes
+(`-input` or `--input`), and may also follow `cli` (`cli -input task.txt`). The API key always
+comes from `.env` (`LLM_API_KEY`), never from the command line. Exit code: 0 done, 1 a task or
+command failed (for example no API key), 2 wrong options.
+
+A task file can hold several tasks separated by a line with only `---`; they run in order, and
+a later task can refer to an earlier answer. Lines starting with `#` are notes.
+`sample-data/agent-task.txt`:
+
+```
+Look at my pantry and what expires in the next few days. Suggest one dinner for 2 that uses the
+expiring food and fits my profile, and add anything I am missing to my cart.
+---
+What is on my shopping list now, and is any of it on sale this week?
+```
+
+Working example (after `cli run sample-data/setup-commands.txt` has filled the pantry):
+
+```
+java -jar target/recipe-agent-0.1.0-jar-with-dependencies.jar -LLMAPI claude -input sample-data/agent-task.txt -output answers.txt
+```
+
+prints, for each task, the task, the steps (for example `1. used the pantry tool {"action":"expiring"}`,
+`2. used the profile tool {"action":"get"}`, `3. used the cart tool {"action":"add","name":"rice",...}`),
+the agent's answer, and `Done.` The answers are also saved in `answers.txt`.
+
+Standard input:
+
+```
+echo What can I cook tonight with what I have? | java -jar target/recipe-agent-0.1.0-jar-with-dependencies.jar -stdin
+type task.txt | java -jar target/recipe-agent-0.1.0-jar-with-dependencies.jar -stdin          # Windows cmd
+Get-Content task.txt | java -jar target/recipe-agent-0.1.0-jar-with-dependencies.jar -stdin   # PowerShell
+java -jar target/recipe-agent-0.1.0-jar-with-dependencies.jar -stdin < task.txt              # macOS / Linux
+```
+
+CLI commands from a file or standard input (every feature, no questions asked):
+
+```
+java -jar target/recipe-agent-0.1.0-jar-with-dependencies.jar -input sample-data/setup-commands.txt -commands
+type my-commands.txt | java -jar target/recipe-agent-0.1.0-jar-with-dependencies.jar -stdin -commands
+```
 
 ## Sample data and example usage
 
