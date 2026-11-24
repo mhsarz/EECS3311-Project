@@ -38,7 +38,7 @@ history rate last 5
 history fav last
 history list
 
-# F09 chat with the agent (it can look at the pantry, cart, profile and flyers)
+# F09 chat with the agent (it can read and change the pantry, cart and profile, and work with recipes)
 chat "What's on sale at No Frills that I could use this week?"
 chat "Add a bag of carrots to my cart"
 cart list

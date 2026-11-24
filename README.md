@@ -4,7 +4,7 @@ EECS 3311 course project. A desktop app (GUI and CLI) with an AI agent that trac
 
 The design (features F01–F11, UML diagrams, and design patterns) is in `AI Smart Recipe and Grocery shopping list Agent.docx` and the `UMLs/` folder.
 
-Stage 2: all features F01–F11 work in both the GUI and the CLI.
+Stage 2: all features F01–F11 work in both the GUI and the CLI, and the agent can also run on its own from the command line (see [Standalone agent](#standalone-agent-run-the-agent-on-a-task-file-standard-input-or-command-line)). The Stage 2 report, with screenshots of every feature, is `stage2-report.pdf` (Word version: `stage2-report.docx`).
 
 ## Quick start
 
@@ -93,7 +93,7 @@ mvn clean package
 
 This compiles the code, runs the tests, and builds `target/recipe-agent-0.1.0-jar-with-dependencies.jar`.
 
-Run only the tests (about 300 JUnit 5 tests; they use a fake AI, so no key or internet is needed):
+Run only the tests (about 350 JUnit 5 tests; they use a fake AI, so no key or internet is needed):
 
 ```
 mvn test
@@ -189,7 +189,7 @@ The GUI and the CLI use the same saved data (`data/`), so changes made in one sh
 | F06 Mark as cooked, undo | `recipe cooked <id>` (the interactive CLI shows what is taken out and asks y/n, then asks for a rating the first time), `undo` |
 | F07 Substitutes | `recipe substitute <id> buttermilk [--use 1]` |
 | F08 History | `history list [--favourites]`, `history rate <id> 4`, `history fav <id>`, `history search chicken`, `history remove <id>` |
-| F09 Chat | `chat "What can I make with chicken?"`, or `chat` for a conversation (then "save this recipe" saves the suggested recipe to history) |
+| F09 Chat | `chat "What can I make with chicken?"`, or `chat` for a conversation. The agent can read and change the pantry, cart and profile, and generate, check, cook, undo, rate and save recipes ("save this recipe" saves it to history) |
 | F10 Flyers | `flyers stores`, `flyers pick "No Frills" Metro`, `flyers refresh`, `flyers upload ./nofrills.pdf --store "No Frills"` (a PDF, .txt or .html file), `flyers list --store "No Frills"` |
 | F11 Missing ingredients | `recipe check <id> [--add-missing]` |
 
@@ -357,15 +357,18 @@ or type in the **Chat** panel.
   results are shown so you can check them. Password-protected PDFs and PDFs over 32 MB (or over
   100 pages) cannot be read. Do not commit real store flyers to the repository.
 - Undo works within one session (one GUI run, one interactive CLI or one command file).
-- The chat can change the cart and the profile, but it can only read the pantry and the flyers.
+- The agent (chat and standalone CLI) cannot upload or refresh flyers itself; use the Flyers tab or
+  the `flyers` CLI commands (`-commands` in standalone mode).
 - The allergy check is a name match on top of the AI's own rules, so always read the ingredients.
 
 ## Project structure
 
 ```
 src/main/java/com/recipeagent/
-  Main.java            entry point (GUI by default, "cli" for the CLI)
+  Main.java            entry point (GUI by default, "cli" for the CLI, options starting with "-"
+                       for the standalone agent)
   cli/                 CLIApp (all features in a terminal; prints alerts; runs command files),
+                       AgentRunner (standalone agent: -input / -stdin / -task, -json),
                        CommandLine, TextTable
   config/AppConfig     reads .env and environment variables
   model/               domain classes (PantryItem, Recipe, CartItem, Flyer, Notification, ...)
@@ -382,7 +385,8 @@ src/main/java/com/recipeagent/
                        checks every LLM reply and retries once with feedback;
                        chat with a tool-use loop (F09) and profile questionnaire (F04);
                        flyer reading (F10), sale matching (F02) and ingredient name matching (F11)
-  agent/tools/         PantryTool, ProfileTool, CartTool, FlyerTool (what the agent can use)
+  agent/tools/         PantryTool, RecipeTool, ProfileTool, CartTool, FlyerTool (what the agent
+                       can use); KitchenActions (the controller methods the tools call)
   llm/                 LLMClient (interface), ClaudeClient (Adapter), AnthropicApi (HTTP client
                        for the Anthropic Messages API), LLMClientProxy (Proxy: daily limit,
                        error handling, usage counting)
@@ -395,4 +399,6 @@ src/main/java/com/recipeagent/
 src/test/java/...      JUnit 5 tests
 sample-data/           made-up flyers and CLI command files for trying the app
 UMLs/                  class, use-case and sequence diagrams (UMLet .uxf + .svg)
+docs/screenshots/      GUI and CLI screenshots of every feature (used in the report)
+stage2-report.pdf      Stage 2 report (also stage2-report.docx)
 ```
