@@ -403,7 +403,10 @@ public class RecipeTool implements AgentTool {
         JsonObject o = new JsonObject();
         o.addProperty("recipe", r.getTitle());
         o.addProperty("rating", stars);
-        o.addProperty("saved_to_history", newlySaved);
+        o.addProperty("in_history", true);
+        if (newlySaved) {
+            o.addProperty("note", "It was not saved before, so it is now saved in the recipe history too.");
+        }
         o.addProperty("change", "Rated");
         return o.toString();
     }
@@ -418,7 +421,10 @@ public class RecipeTool implements AgentTool {
         JsonObject o = new JsonObject();
         o.addProperty("recipe", r.getTitle());
         o.addProperty("favourite", want);
-        o.addProperty("saved_to_history", newlySaved);
+        o.addProperty("in_history", true);
+        if (newlySaved) {
+            o.addProperty("note", "It was not saved before, so it is now saved in the recipe history too.");
+        }
         o.addProperty("change", want ? "Added to favourites" : "Removed from favourites");
         return o.toString();
     }

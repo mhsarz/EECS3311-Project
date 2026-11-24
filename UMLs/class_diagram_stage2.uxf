@@ -431,7 +431,7 @@ bg=#C8E6C9</panel_attributes>
 -builder: PromptBuilder
 -tools: Map&lt;String, AgentTool&gt;
 -chatHistory: List&lt;String&gt;
--maxToolCalls: int = 5
+-maxToolCalls: int = 8
 -lastActions: List&lt;AgentAction&gt;
 --
 +generateRecipe(req: RecipeRequest): Recipe
@@ -2539,5 +2539,126 @@ throws</panel_attributes>
 m2=0..1
 builds</panel_attributes>
     <additional_attributes>200.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>115</x>
+      <y>725</y>
+      <w>245</w>
+      <h>165</h>
+    </coordinates>
+    <panel_attributes>&lt;&lt;interface&gt;&gt;
+/*KitchenActions*/
+--
++addPantryItem(item: PantryItem, merge: boolean): boolean
++updatePantryItem(id: String, ...): PantryItem
++removePantryItemByName(name: String): boolean
++generateRecipe(req: RecipeRequest): Recipe
++checkIngredients(r: Recipe): IngredientCheck
++suggestSubstitutes(r: Recipe, ing: String): List&lt;Substitution&gt;
++useSubstitute(r: Recipe, ing: String, s: Substitution): boolean
++markCooked(r: Recipe): List&lt;String&gt;
++undo(): Optional&lt;String&gt;
++addToCart(items: List&lt;CartItem&gt;): List&lt;CartItem&gt;
++saveRecipe(r: Recipe): boolean
++rateRecipe(id: String, stars: int): void
++toggleFavourite(id: String): boolean
+bg=#C8E6C9</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>380</x>
+      <y>745</y>
+      <w>165</w>
+      <h>60</h>
+    </coordinates>
+    <panel_attributes>*RecipeTool*
+--
+-actions: KitchenActions
+-current: Recipe
+--
++execute(args: String): String
+bg=#C8E6C9</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>780</x>
+      <y>288</y>
+      <w>160</w>
+      <h>65</h>
+    </coordinates>
+    <panel_attributes>*AgentRunner*
+--
+-controller: AgentController
+--
+_+launch(args: String[], ...): int_
+_+isAgentMode(args: String[]): boolean_
+~run(o: Options): int
+bg=#C8E6C9</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>465</x>
+      <y>635</y>
+      <w>160</w>
+      <h>115</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;.</panel_attributes>
+    <additional_attributes>310.0;10.0;10.0;220.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>355</x>
+      <y>765</y>
+      <w>30</w>
+      <h>10</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+m2=0..1</panel_attributes>
+    <additional_attributes>50.0;10.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>355</x>
+      <y>780</y>
+      <w>585</w>
+      <h>37</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+m2=0..1</panel_attributes>
+    <additional_attributes>1160.0;10.0;1160.0;64.0;10.0;64.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>355</x>
+      <y>775</y>
+      <w>725</w>
+      <h>80</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;.</panel_attributes>
+    <additional_attributes>10.0;150.0;1380.0;150.0;1380.0;10.0;1440.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>935</x>
+      <y>325</y>
+      <w>145</w>
+      <h>52</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;
+m1=1
+m2=1</panel_attributes>
+    <additional_attributes>10.0;10.0;280.0;94.0</additional_attributes>
   </element>
 </diagram>
